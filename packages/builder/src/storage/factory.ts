@@ -26,6 +26,21 @@ export class StorageFactory {
    * @returns 默认存储提供商实例
    */
   static createDefaultProvider(): StorageProvider {
+    // 优先使用 GitHub 存储
+    if (env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO) {
+      const config: StorageConfig = {
+        provider: 'github',
+        owner: env.GITHUB_OWNER,
+        repo: env.GITHUB_REPO,
+        branch: env.GITHUB_BRANCH || 'main',
+        token: env.GITHUB_TOKEN,
+        path: env.GITHUB_PATH || 'photos',
+        useRawUrl: env.GITHUB_USE_RAW_URL !== 'false',
+      }
+      return this.createProvider(config)
+    }
+
+    // 如果没有 GitHub 配置，则使用 S3
     const config: StorageConfig = {
       provider: 's3',
       bucket: env.S3_BUCKET_NAME,

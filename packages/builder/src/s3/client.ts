@@ -28,4 +28,14 @@ function createS3Client(): S3Client {
   return new S3Client(s3ClientConfig)
 }
 
-export const s3Client = createS3Client()
+let _s3Client: S3Client | null = null
+
+export function getS3Client(): S3Client {
+  if (!_s3Client) {
+    _s3Client = createS3Client()
+  }
+  return _s3Client
+}
+
+// 为了保持向后兼容性，导出一个函数而不是直接导出客户端实例
+export const s3Client = getS3Client()
