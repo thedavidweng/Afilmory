@@ -36,7 +36,7 @@ const defaultConfig: SiteConfig = {
   title: "David's Photo Gallery",
   description:
     'Capturing moments in life.',
-  url: 'https://afilmory.vercel.app/',
+  url: 'https://afilmory.pages.dev/',
   accentColor: '#007bff',
   author: {
     name: 'David',
