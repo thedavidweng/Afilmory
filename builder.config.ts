@@ -122,7 +122,23 @@ const readUserConfig = () => {
     readFileSync(new URL('builder.config.json', import.meta.url), 'utf-8'),
   ) as BuilderConfig
 
-  return merge(defaultBuilderConfig, userConfig)
+  // 使用深度合并，确保嵌套对象被正确合并
+  return {
+    ...defaultBuilderConfig,
+    ...userConfig,
+    repo: { ...defaultBuilderConfig.repo, ...userConfig.repo },
+    storage: { ...defaultBuilderConfig.storage, ...userConfig.storage },
+    options: { ...defaultBuilderConfig.options, ...userConfig.options },
+    logging: { ...defaultBuilderConfig.logging, ...userConfig.logging },
+    performance: {
+      ...defaultBuilderConfig.performance,
+      ...userConfig.performance,
+      worker: {
+        ...defaultBuilderConfig.performance.worker,
+        ...userConfig.performance?.worker,
+      },
+    },
+  }
 }
 
 export const builderConfig: BuilderConfig = readUserConfig()
