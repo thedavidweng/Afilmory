@@ -1,0 +1,32 @@
+{
+  "repo": {
+    "enable": true,
+    "url": "https://github.com/thedavidweng/gallery-assets"
+  },
+  "storage": {
+    "provider": "github",
+    "bucket": "my-photos",
+    "region": "us-east-1",
+    "prefix": "photos/",
+    "customDomain": "cdn.example.com"
+  },
+  "options": {
+    "defaultConcurrency": 8,
+    "enableLivePhotoDetection": true,
+    "showProgress": true,
+    "showDetailedStats": true
+  },
+  "logging": {
+    "verbose": true,
+    "level": "info",
+    "outputToFile": false
+  },
+  "performance": {
+    "worker": {
+      "workerCount": 8,
+      "timeout": 30000,
+      "useClusterMode": true,
+      "workerConcurrency": 2
+    }
+  }
+}
