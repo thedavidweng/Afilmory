@@ -12,10 +12,21 @@
     "useRawUrl": true
   },
   "options": {
-    "defaultConcurrency": 8,
-    "enableLivePhotoDetection": true,
-    "showProgress": true,
-    "showDetailedStats": true
+    "concurrency": {
+      "maxWorkers": 2,
+      "workerConcurrency": 1,
+      "requestDelay": 1000
+    },
+    "logging": {
+      "level": "info",
+      "format": "text"
+    },
+    "performance": {
+      "cache": true,
+      "cacheTTL": 3600,
+      "retryCount": 3,
+      "retryDelay": 2000
+    }
   },
   "logging": {
     "verbose": true,
