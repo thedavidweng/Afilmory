@@ -32,20 +32,20 @@ interface Social {
 }
 
 const defaultConfig: SiteConfig = {
-  name: "Innei's Afilmory",
-  title: "Innei's Afilmory",
+  name: "David's Photo Gallery",
+  title: "David's Photo Gallery",
   description:
-    'Capturing beautiful moments in life, documenting daily warmth and emotions through my lens.',
-  url: 'https://afilmory.innei.in',
+    'Capturing moments in life.',
+  url: 'https://afilmory.vercel.app/',
   accentColor: '#007bff',
   author: {
-    name: 'Innei',
-    url: 'https://innei.in/',
-    avatar: 'https://cdn.jsdelivr.net/gh/Innei/static@master/avatar.png',
+    name: 'David',
+    url: 'https://davidweng.eu.org/',
+    avatar: 'https://avatars.githubusercontent.com/u/95214375?v=4',
   },
   social: {
-    twitter: '@__oQuery',
-    github: 'Innei',
+    twitter: '@thedavidweng',
+    github: 'thedavidweng',
   },
 }
 export const siteConfig: SiteConfig = merge(defaultConfig, userConfig) as any
