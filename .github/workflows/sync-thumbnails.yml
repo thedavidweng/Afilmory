@@ -1,0 +1,67 @@
+name: Sync Thumbnails
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'public/thumbnails/**'
+      - 'src/data/photos-manifest.json'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Afilmory
+        uses: actions/checkout@v4
+        with:
+          path: afilmory
+
+      - name: Checkout Gallery Assets
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.GALLERY_ASSETS_REPO }}
+          token: ${{ secrets.GALLERY_ASSETS_TOKEN }}
+          path: gallery-assets
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: |
+          cd afilmory
+          pnpm install
+
+      - name: Build manifest
+        run: |
+          cd afilmory
+          pnpm run build:manifest -- --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GALLERY_ASSETS_TOKEN }}
+          GITHUB_OWNER: ${{ secrets.GALLERY_ASSETS_OWNER }}
+          GITHUB_REPO: ${{ secrets.GALLERY_ASSETS_REPO_NAME }}
+
+      - name: Sync files
+        run: |
+          # 同步缩略图
+          rsync -av --delete afilmory/public/thumbnails/ gallery-assets/thumbnails/
+          
+          # 同步 manifest
+          cp afilmory/src/data/photos-manifest.json gallery-assets/
+
+      - name: Commit and push
+        run: |
+          cd gallery-assets
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: sync thumbnails and manifest" && git push) 
