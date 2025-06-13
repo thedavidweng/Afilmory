@@ -5,10 +5,11 @@
   },
   "storage": {
     "provider": "github",
-    "bucket": "my-photos",
-    "region": "us-east-1",
-    "prefix": "photos/",
-    "customDomain": "cdn.example.com"
+    "owner": "thedavidweng",
+    "repo": "gallery-assets",
+    "branch": "main",
+    "path": "photos",
+    "useRawUrl": true
   },
   "options": {
     "defaultConcurrency": 8,
