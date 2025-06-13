@@ -2,6 +2,8 @@ import type { S3ClientConfig } from '@aws-sdk/client-s3'
 import { S3Client } from '@aws-sdk/client-s3'
 import { env } from '@env'
 
+let _s3Client: S3Client | null = null
+
 // 创建 S3 客户端
 function createS3Client(): S3Client {
   if (!env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY) {
@@ -28,14 +30,9 @@ function createS3Client(): S3Client {
   return new S3Client(s3ClientConfig)
 }
 
-let _s3Client: S3Client | null = null
-
 export function getS3Client(): S3Client {
   if (!_s3Client) {
     _s3Client = createS3Client()
   }
   return _s3Client
 }
-
-// 为了保持向后兼容性，导出一个函数而不是直接导出客户端实例
-export const s3Client = getS3Client()

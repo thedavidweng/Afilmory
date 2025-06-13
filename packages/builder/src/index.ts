@@ -18,11 +18,12 @@ export type {
 } from './types/photo.js'
 
 // S3 操作
-export { s3Client } from './s3/client.js'
+export { getS3Client } from './s3/client.js'
 export {
   generateS3Url,
   getImageFromS3,
   listImagesFromS3,
+  listAllFilesFromS3,
 } from './s3/operations.js'
 
 // 图像处理

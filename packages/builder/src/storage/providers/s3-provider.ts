@@ -5,7 +5,7 @@ import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
 import { SUPPORTED_FORMATS } from '../../constants/index.js'
 import type { Logger } from '../../logger/index.js'
-import { s3Client } from '../../s3/client.js'
+import { getS3Client } from '../../s3/client.js'
 import type { S3Config, StorageObject, StorageProvider } from '../interfaces'
 
 // 将 AWS S3 对象转换为通用存储对象
@@ -37,7 +37,7 @@ export class S3StorageProvider implements StorageProvider {
         Key: key,
       })
 
-      const response = await s3Client.send(command)
+      const response = await getS3Client().send(command)
 
       if (!response.Body) {
         log?.error(`S3 响应中没有 Body: ${key}`)
@@ -87,7 +87,7 @@ export class S3StorageProvider implements StorageProvider {
       MaxKeys: 1000, // 最多获取 1000 张照片
     })
 
-    const listResponse = await s3Client.send(listCommand)
+    const listResponse = await getS3Client().send(listCommand)
     const objects = listResponse.Contents || []
 
     // 过滤出图片文件并转换为通用格式
@@ -109,7 +109,7 @@ export class S3StorageProvider implements StorageProvider {
       MaxKeys: 1000,
     })
 
-    const listResponse = await s3Client.send(listCommand)
+    const listResponse = await getS3Client().send(listCommand)
     const objects = listResponse.Contents || []
 
     return objects.map((obj) => convertS3ObjectToStorageObject(obj))
