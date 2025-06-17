@@ -1,0 +1,24 @@
+{
+  "name": "David's Photo Gallery",
+  "title": "David's Photo Gallery",
+  "description": "Capturing moments in life.",
+  "url": "https://afilmory.pages.dev/",
+  "accentColor": "#007bff",
+  "author": {
+    "name": "David Weng",
+    "url": "https://davidweng.eu.org/",
+    "avatar": "https://cdn.jsdelivr.net/gh/thedavidweng/gallery-assets/D.png"
+  },
+  "social": {
+    "twitter": "@thedavidweng",
+    "github": "thedavidweng"
+  },
+  "feed": {
+    "folo": {
+      "challenge": {
+        "feedId": "TBD",
+        "userId": "42127111322644480"
+      }
+    }
+  }
+}
