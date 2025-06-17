@@ -1,0 +1,33 @@
+{
+  "repo": {
+    "enable": false,
+    "url": "https://github.com/thedavidweng/gallery-assets"
+  },
+  "storage": {
+    "provider": "s3",
+    "bucket": "my-photos",
+    "region": "auto",
+    "endpoint": "https://99e63a7c867f83d0d7806e0e6cd09933.r2.cloudflarestorage.com",
+    "prefix": "photos/",
+    "customDomain": "r2my-photos.davidweng.eu.org"
+  },
+  "options": {
+    "defaultConcurrency": 8,
+    "enableLivePhotoDetection": true,
+    "showProgress": true,
+    "showDetailedStats": true
+  },
+  "logging": {
+    "verbose": true,
+    "level": "info",
+    "outputToFile": false
+  },
+  "performance": {
+    "worker": {
+      "workerCount": 8,
+      "timeout": 30000,
+      "useClusterMode": true,
+      "workerConcurrency": 2
+    }
+  }
+}
