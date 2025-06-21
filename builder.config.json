@@ -9,7 +9,7 @@
     "region": "auto",
     "endpoint": "https://99e63a7c867f83d0d7806e0e6cd09933.r2.cloudflarestorage.com",
     "prefix": "photos/",
-    "customDomain": "r2my-photos.davidweng.eu.org"
+    "customDomain": "https://r2my-photos.davidweng.eu.org"
   },
   "options": {
     "defaultConcurrency": 8,
