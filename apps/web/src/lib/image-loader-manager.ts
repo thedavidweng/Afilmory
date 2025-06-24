@@ -1,11 +1,7 @@
 import { i18nAtom } from '~/i18n'
 import { jotaiStore } from '~/lib/jotai'
 import { LRUCache } from '~/lib/lru-cache'
-import {
-  convertMovToMp4,
-  isVideoConversionSupported,
-  needsVideoConversion,
-} from '~/lib/video-converter'
+import { convertMovToMp4, needsVideoConversion } from '~/lib/video-converter'
 
 export interface LoadingState {
   isVisible: boolean
@@ -71,6 +67,37 @@ export class ImageLoaderManager {
   private currentXHR: XMLHttpRequest | null = null
   private delayTimer: NodeJS.Timeout | null = null
 
+  /**
+   * 验证 Blob 是否为有效的图片格式
+   */
+  private isValidImageBlob(blob: Blob): boolean {
+    // 检查 MIME 类型
+    const validImageTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/heic',
+      'image/heif',
+    ]
+
+    // 检查 Content-Type
+    if (!blob.type || !validImageTypes.includes(blob.type.toLowerCase())) {
+      console.warn(`Invalid image MIME type: ${blob.type}`)
+      return false
+    }
+
+    // 检查文件大小（至少应该有一些字节）
+    if (blob.size === 0) {
+      console.warn('Empty blob detected')
+      return false
+    }
+
+    return true
+  }
+
   async loadImage(
     src: string,
     callbacks: LoadingCallbacks = {},
@@ -91,13 +118,28 @@ export class ImageLoaderManager {
         xhr.onload = async () => {
           if (xhr.status === 200) {
             try {
+              // 验证响应是否为图片
+              const blob = xhr.response as Blob
+              if (!this.isValidImageBlob(blob)) {
+                onLoadingStateUpdate?.({
+                  isVisible: false,
+                })
+                onError?.()
+                reject(new Error('Response is not a valid image'))
+                return
+              }
+
               const result = await this.processImageBlob(
-                xhr.response,
+                blob,
                 src, // 传递原始 URL
                 callbacks,
               )
               resolve(result)
             } catch (error) {
+              onLoadingStateUpdate?.({
+                isVisible: false,
+              })
+              onError?.()
               reject(error)
             }
           } else {
@@ -318,12 +360,6 @@ export class ImageLoaderManager {
     callbacks: LoadingCallbacks,
   ): Promise<VideoProcessResult> {
     const { onLoadingStateUpdate } = callbacks
-
-    // 检查浏览器是否支持视频转换
-    if (!isVideoConversionSupported()) {
-      console.warn('Video conversion not supported in this browser')
-      return {}
-    }
 
     // 更新加载指示器显示转换进度
     onLoadingStateUpdate?.({

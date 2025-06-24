@@ -47,7 +47,6 @@
     "jotai": "2.12.5",
     "masonic": "4.1.0",
     "motion": "12.17.0",
-    "mp4-muxer": "5.2.1",
     "ofetch": "1.4.1",
     "react": "19.1.0",
     "react-blurhash": "0.3.0",
@@ -65,6 +64,7 @@
     "swiper": "11.2.8",
     "tailwind-merge": "3.3.1",
     "usehooks-ts": "3.1.1",
+    "vaul": "1.1.2",
     "zod": "3.25.63",
     "zustand": "5.0.5"
   },

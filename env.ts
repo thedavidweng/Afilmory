@@ -1,4 +1,4 @@
-import 'dotenv/config'
+import 'dotenv-expand/config'
 
 import { createEnv } from '@t3-oss/env-core'
 import { z } from 'zod'
@@ -15,6 +15,7 @@ export const env = createEnv({
     S3_BUCKET_NAME: z.string().min(1).optional(),
     S3_PREFIX: z.string().default('').optional(),
     S3_CUSTOM_DOMAIN: z.string().default('').optional(),
+    S3_EXCLUDE_REGEX: z.string().optional(),
   },
   runtimeEnv: process.env,
   isServer: typeof window === 'undefined',
