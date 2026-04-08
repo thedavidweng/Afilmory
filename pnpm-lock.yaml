@@ -755,9 +755,6 @@ importers:
       '@afilmory/env':
         specifier: workspace:*
         version: link:../../packages/env
-      '@afilmory/framework':
-        specifier: workspace:*
-        version: link:../../packages/framework
       '@afilmory/og-renderer':
         specifier: workspace:*
         version: link:../../../packages/renderer
@@ -791,6 +788,18 @@ importers:
       '@resvg/resvg-js':
         specifier: 2.6.2
         version: 2.6.2
+      '@tsuki-hono/common':
+        specifier: 0.0.2
+        version: 0.0.2(hono@4.11.9)
+      '@tsuki-hono/core':
+        specifier: 0.0.2
+        version: 0.0.2
+      '@tsuki-hono/event-emitter':
+        specifier: 0.0.2
+        version: 0.0.2(hono@4.11.9)(ioredis@5.9.3)
+      '@tsuki-hono/openapi':
+        specifier: 0.0.2
+        version: 0.0.2(hono@4.11.9)
       '@types/busboy':
         specifier: 1.5.4
         version: 1.5.4
@@ -1183,40 +1192,6 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
-  be/packages/framework:
-    dependencies:
-      hono:
-        specifier: 4.11.9
-        version: 4.11.9
-      picocolors:
-        specifier: 1.1.1
-        version: 1.1.1
-      reflect-metadata:
-        specifier: 0.2.2
-        version: 0.2.2
-      tsyringe:
-        specifier: 4.10.0
-        version: 4.10.0
-      zod:
-        specifier: ^4.3.6
-        version: 4.3.6
-    devDependencies:
-      '@types/node':
-        specifier: ^25.2.3
-        version: 25.2.3
-      '@vitest/coverage-v8':
-        specifier: 4.0.18
-        version: 4.0.18(vitest@4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.1))
-      ioredis:
-        specifier: 5.9.3
-        version: 5.9.3
-      unplugin-swc:
-        specifier: 1.5.9
-        version: 1.5.9(@swc/core@1.15.8(@swc/helpers@0.5.17))(rollup@4.57.1)
-      vitest:
-        specifier: 4.0.18
-        version: 4.0.18(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.1)
-
   be/packages/redis:
     dependencies:
       ioredis:
@@ -1225,9 +1200,12 @@ importers:
 
   be/packages/task-queue:
     dependencies:
-      '@afilmory/framework':
-        specifier: workspace:*
-        version: link:../framework
+      '@tsuki-hono/common':
+        specifier: 0.0.2
+        version: 0.0.2(hono@4.11.9)
+      '@tsuki-hono/core':
+        specifier: 0.0.2
+        version: 0.0.2
       tsyringe:
         specifier: ^4.10.0
         version: 4.10.0
@@ -5687,6 +5665,22 @@ packages:
   '@tokenizer/token@0.3.0':
     resolution: {integrity: sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A==}
 
+  '@tsuki-hono/common@0.0.2':
+    resolution: {integrity: sha512-I2OXW1236BR2TAAw2x6f3cscOZvOmO8+L66vO9abACK811mNy9YDa3EApvEXKNXvyMcfIoRt3wppPwAOXrS6ag==}
+    peerDependencies:
+      hono: '>=4.0.0'
+
+  '@tsuki-hono/core@0.0.2':
+    resolution: {integrity: sha512-aLBgF+BQfzqF4VIBfPd234F/ktz4LlNiOqPV8fam8o7x3eYKfX/mpFqiWpoKfBpsAmNnvyQTwsD3+ETlCHS5qQ==}
+
+  '@tsuki-hono/event-emitter@0.0.2':
+    resolution: {integrity: sha512-0xRInuiM/poH6Ubf68DWou/n8VgfUMmx1Wg+nDDtfEQhxQGipkdhsXMDWquBMb/VqyRCJ/1lB6eK/LS+0j+sIw==}
+    peerDependencies:
+      ioredis: '>=5.8.0'
+
+  '@tsuki-hono/openapi@0.0.2':
+    resolution: {integrity: sha512-thhaKgWfUnRso1IF5vbMugTWgOgjxNDrFfSz/VhL9HZdOTEHzPpYlUOnDuXI1eXqrsTs1ZWbTsNnkdkace6IyQ==}
+
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
@@ -5959,6 +5953,7 @@ packages:
   '@vercel/postgres@0.10.0':
     resolution: {integrity: sha512-fSD23DxGND40IzSkXjcFcxr53t3Tiym59Is0jSYIFpG4/0f0KO9SGtcp1sXiebvPaGe7N/tU05cH4yt2S6/IPg==}
     engines: {node: '>=18.14'}
+    deprecated: '@vercel/postgres is deprecated. If you are setting up a new database, you can choose an alternate storage solution from the Vercel Marketplace. If you had an existing Vercel Postgres database, it should have been migrated to Neon as a native Vercel integration. You can find more details and the guide to migrate to Neon''s SDKs here: https://neon.com/docs/guides/vercel-postgres-transition-guide'
 
   '@vingle/bmp-js@0.2.5':
     resolution: {integrity: sha512-tiY69wMrXgIVcdpkjQybXTyQw+P2rKzUfA6b+biM6BD1utr5QeeEj9fzs0fFHVf+3siTsYwzI6zltV9+i6ehEA==}
@@ -15965,6 +15960,39 @@ snapshots:
       - supports-color
 
   '@tokenizer/token@0.3.0': {}
+
+  '@tsuki-hono/common@0.0.2(hono@4.11.9)':
+    dependencies:
+      hono: 4.11.9
+      picocolors: 1.1.1
+      reflect-metadata: 0.2.2
+      tsyringe: 4.10.0
+      zod: 4.3.6
+
+  '@tsuki-hono/core@0.0.2':
+    dependencies:
+      '@tsuki-hono/common': 0.0.2(hono@4.11.9)
+      hono: 4.11.9
+      picocolors: 1.1.1
+      reflect-metadata: 0.2.2
+      tsyringe: 4.10.0
+
+  '@tsuki-hono/event-emitter@0.0.2(hono@4.11.9)(ioredis@5.9.3)':
+    dependencies:
+      '@tsuki-hono/common': 0.0.2(hono@4.11.9)
+      '@tsuki-hono/core': 0.0.2
+      ioredis: 5.9.3
+      reflect-metadata: 0.2.2
+      tsyringe: 4.10.0
+    transitivePeerDependencies:
+      - hono
+
+  '@tsuki-hono/openapi@0.0.2(hono@4.11.9)':
+    dependencies:
+      '@tsuki-hono/common': 0.0.2(hono@4.11.9)
+      zod: 4.3.6
+    transitivePeerDependencies:
+      - hono
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
