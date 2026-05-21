@@ -29,7 +29,7 @@
     "exiftool-vendored": "35.20.0",
     "fast-xml-parser": "5.8.0",
     "heic-convert": "2.1.0",
-    "heic-to": "1.4.2",
+    "heic-to": "1.4.3",
     "nunjucks": "3.2.4",
     "satori": "catalog:",
     "sharp": "0.34.5",

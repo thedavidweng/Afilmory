@@ -55,7 +55,7 @@
     "dotenv-expand": "catalog:",
     "drizzle-kit": "0.31.10",
     "next": "16.2.6",
-    "postcss": "8.5.14",
+    "postcss": "8.5.15",
     "tailwind-scrollbar": "catalog:",
     "tailwindcss": "catalog:",
     "tailwindcss-animate": "catalog:",

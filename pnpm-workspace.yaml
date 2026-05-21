@@ -14,7 +14,7 @@ catalog:
   '@t3-oss/env-core': 0.13.11
   '@tailwindcss/postcss': 4.3.0
   '@tailwindcss/typography': 0.5.19
-  '@types/react': 19.2.14
+  '@types/react': 19.2.15
   '@types/react-dom': 19.2.3
   dotenv-expand: 13.0.0
   motion: 12.38.0
