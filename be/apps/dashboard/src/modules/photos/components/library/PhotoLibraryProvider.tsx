@@ -83,35 +83,43 @@ function createPhotoLibraryStore(params: CreatePhotoLibraryStoreParams) {
     }
 
     const performDelete = async (ids: string[], options?: DeleteAssetOptions) => {
-      if (ids.length === 0) return
+      if (ids.length === 0) {
+        return
+      }
       set({ isDeleting: true })
       try {
         await requestDeleteAssets(ids, options)
         toast.success(`已删除 ${ids.length} 个资源`)
-        set((state) => ({
-          selectedIds: state.selectedIds.filter((id) => !ids.includes(id)),
+        set(state => ({
+          selectedIds: state.selectedIds.filter(id => !ids.includes(id)),
         }))
         refetchAssets()
-      } catch (error) {
+      }
+      catch (error) {
         const message = getRequestErrorMessage(error, '删除失败，请稍后重试。')
         toast.error('删除失败', { description: message })
-      } finally {
+      }
+      finally {
         set({ isDeleting: false })
       }
     }
 
     const performUpload = async (files: File[], options?: PhotoUploadRequestOptions) => {
-      if (files.length === 0) return
+      if (files.length === 0) {
+        return
+      }
       set({ isUploading: true })
       try {
         await requestUploadAssets(files, options)
         toast.success(`成功上传 ${files.length} 张图片`)
         refetchAssets()
-      } catch (error) {
+      }
+      catch (error) {
         const message = getRequestErrorMessage(error, '上传失败，请稍后重试。')
         toast.error('上传失败', { description: message })
         throw error
-      } finally {
+      }
+      finally {
         set({ isUploading: false })
       }
     }
@@ -127,7 +135,8 @@ function createPhotoLibraryStore(params: CreatePhotoLibraryStoreParams) {
       try {
         const url = await requestStorageUrl(asset.storageKey)
         window.open(url, '_blank', 'noopener,noreferrer')
-      } catch (error) {
+      }
+      catch (error) {
         const message = getRequestErrorMessage(error, '无法获取原图链接')
         toast.error('打开失败', { description: message })
       }
@@ -144,7 +153,7 @@ function createPhotoLibraryStore(params: CreatePhotoLibraryStoreParams) {
       toggleSelect: (id: string) =>
         set((state) => {
           const next = state.selectedIds.includes(id)
-            ? state.selectedIds.filter((item) => item !== id)
+            ? state.selectedIds.filter(item => item !== id)
             : [...state.selectedIds, id]
           return { selectedIds: next }
         }),
@@ -154,7 +163,7 @@ function createPhotoLibraryStore(params: CreatePhotoLibraryStoreParams) {
           if (!state.assets || state.assets.length === 0) {
             return {}
           }
-          return { selectedIds: state.assets.map((asset) => asset.id) }
+          return { selectedIds: state.assets.map(asset => asset.id) }
         }),
       deleteAsset: (asset, options) => {
         if (options) {
@@ -162,7 +171,7 @@ function createPhotoLibraryStore(params: CreatePhotoLibraryStoreParams) {
         }
 
         const assetLabel = getAssetLabel(asset)
-        return presentDeletePrompt(assetLabel, (promptOptions) => performDelete([asset.id], promptOptions))
+        return presentDeletePrompt(assetLabel, promptOptions => performDelete([asset.id], promptOptions))
       },
       deleteSelected: () => {
         const ids = get().selectedIds
@@ -171,11 +180,11 @@ function createPhotoLibraryStore(params: CreatePhotoLibraryStoreParams) {
         }
 
         const assets = get().assets ?? []
-        const selectedAssets = assets.filter((asset) => ids.includes(asset.id))
-        const targetLabel =
-          selectedAssets.length === 1 ? getAssetLabel(selectedAssets[0]) : `选中的 ${ids.length} 个资源`
+        const selectedAssets = assets.filter(asset => ids.includes(asset.id))
+        const targetLabel
+          = selectedAssets.length === 1 ? getAssetLabel(selectedAssets[0]) : `选中的 ${ids.length} 个资源`
 
-        return presentDeletePrompt(targetLabel, (promptOptions) => performDelete(ids, promptOptions))
+        return presentDeletePrompt(targetLabel, promptOptions => performDelete(ids, promptOptions))
       },
       uploadAssets: (files, options) => performUpload(Array.from(files), options),
       openAsset: performOpenAsset,
@@ -244,7 +253,7 @@ export function PhotoLibraryProvider({ isActive, children }: PhotoLibraryProvide
           onServerEvent: options?.onServerEvent,
         })
       },
-      requestStorageUrl: (storageKey) => getPhotoStorageUrl(storageKey),
+      requestStorageUrl: storageKey => getPhotoStorageUrl(storageKey),
       refetchAssets: () => {
         const refetch = refetchListRef.current
         if (typeof refetch === 'function') {
@@ -261,9 +270,9 @@ export function PhotoLibraryProvider({ isActive, children }: PhotoLibraryProvide
       assets: listQuery.data,
       libraryTotalCount: listQuery.data?.length ?? 0,
       availableTags: deriveAvailableTags(listQuery.data),
-      isLoading: listQuery.isLoading || listQuery.isFetching,
+      isLoading: listQuery.isLoading,
     })
-  }, [store, listQuery.data, listQuery.isFetching, listQuery.isLoading])
+  }, [store, listQuery.data, listQuery.isLoading])
 
   useEffect(() => {
     store.setState({ isDeleting: deleteMutation.isPending })
@@ -282,6 +291,7 @@ export function PhotoLibraryProvider({ isActive, children }: PhotoLibraryProvide
   return <PhotoLibraryStoreContext value={store}>{children}</PhotoLibraryStoreContext>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePhotoLibraryStore<T>(selector: (state: PhotoLibraryStoreState) => T): T {
   const store = use(PhotoLibraryStoreContext)
   if (!store) {
