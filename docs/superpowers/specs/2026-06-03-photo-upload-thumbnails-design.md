@@ -182,8 +182,9 @@ Manual smoke test:
    warning.
 3. Close the modal. Expect: DevTools Memory → Heap snapshot shows no residual
    blob entries from this session.
-4. Re-open the modal mid-upload (existing "merge dropped photos" flow): newly
-   dropped files get thumbnails on first paint.
+4. With the modal already open in the review step, drop more files in (this
+   triggers `addFiles`). Newly added files get thumbnails on first paint;
+   originally-queued files keep their previews (cache reuse).
 
 ## Non-goals (explicit)
 
