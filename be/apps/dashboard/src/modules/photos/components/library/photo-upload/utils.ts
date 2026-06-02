@@ -1,6 +1,11 @@
+import { getStorageNS } from '~/lib/ns'
+
 import type { PhotoSyncProgressStage, PhotoSyncStageTotals } from '../../../types'
 import { STAGE_ORDER } from './constants'
 import type { FileProgressEntry, ProcessingStageState } from './types'
+
+const RECENT_TAGS_STORAGE_KEY = getStorageNS('photo-upload-recent-tags')
+const RECENT_TAGS_LIMIT = 8
 
 const IMAGE_EXTENSIONS = new Set([
   'jpg',
@@ -34,7 +39,9 @@ const getBaseName = (name: string) => {
 }
 
 export function formatBytes(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '未知大小'
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '未知大小'
+  }
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
   const size = bytes / 1024 ** exponent
@@ -92,11 +99,11 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 export function createFileList(fileArray: File[]): FileList {
   if (typeof DataTransfer !== 'undefined') {
     const transfer = new DataTransfer()
-    fileArray.forEach((file) => transfer.items.add(file))
+    fileArray.forEach(file => transfer.items.add(file))
     return transfer.files
   }
 
-  const fallback: Record<number, File> & { length: number; item: (index: number) => File | null } = {
+  const fallback: Record<number, File> & { length: number, item: (index: number) => File | null } = {
     length: fileArray.length,
     item: (index: number) => fileArray[index] ?? null,
   }
@@ -127,7 +134,7 @@ export function deriveDirectoryFromTags(tags: string[]): string | null {
   if (!Array.isArray(tags) || tags.length === 0) {
     return null
   }
-  const segments = tags.map((element) => sanitizeTagSegment(element)).filter((segment) => segment.length > 0)
+  const segments = tags.map(element => sanitizeTagSegment(element)).filter(segment => segment.length > 0)
 
   if (segments.length === 0) {
     return null
@@ -138,14 +145,14 @@ export function deriveDirectoryFromTags(tags: string[]): string | null {
 
 export function collectUnmatchedMovFiles(files: File[]) {
   const imageBaseNames = new Set(
-    files.filter((file) => IMAGE_EXTENSIONS.has(getFileExtension(file.name))).map((file) => getBaseName(file.name)),
+    files.filter(file => IMAGE_EXTENSIONS.has(getFileExtension(file.name))).map(file => getBaseName(file.name)),
   )
 
-  const unmatched = files.filter((file) => isMovFile(file.name) && !imageBaseNames.has(getBaseName(file.name)))
+  const unmatched = files.filter(file => isMovFile(file.name) && !imageBaseNames.has(getBaseName(file.name)))
 
   return {
     unmatched,
-    hasMov: files.some((file) => isMovFile(file.name)),
+    hasMov: files.some(file => isMovFile(file.name)),
   }
 }
 
@@ -155,4 +162,70 @@ export function calculateTotalSize(files: File[]): number {
 
 export function calculateUploadedBytes(entries: FileProgressEntry[]): number {
   return entries.reduce((sum, entry) => sum + Math.min(entry.uploadedBytes, entry.size), 0)
+}
+
+export function readRecentTags(): string[] {
+  if (typeof localStorage === 'undefined') {
+    return []
+  }
+  try {
+    const raw = localStorage.getItem(RECENT_TAGS_STORAGE_KEY)
+    if (!raw) {
+      return []
+    }
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const item of parsed) {
+      if (typeof item !== 'string') {
+        continue
+      }
+      const normalized = item.trim().toLowerCase()
+      if (!normalized || seen.has(normalized)) {
+        continue
+      }
+      seen.add(normalized)
+      result.push(normalized)
+      if (result.length >= RECENT_TAGS_LIMIT) {
+        break
+      }
+    }
+    return result
+  }
+  catch {
+    return []
+  }
+}
+
+export function rememberRecentTags(tags: string[]): void {
+  if (typeof localStorage === 'undefined' || !Array.isArray(tags) || tags.length === 0) {
+    return
+  }
+  const incoming: string[] = []
+  const seen = new Set<string>()
+  for (const tag of tags) {
+    if (typeof tag !== 'string') {
+      continue
+    }
+    const normalized = tag.trim().toLowerCase()
+    if (!normalized || seen.has(normalized)) {
+      continue
+    }
+    seen.add(normalized)
+    incoming.push(normalized)
+  }
+  if (incoming.length === 0) {
+    return
+  }
+  const existing = readRecentTags().filter(tag => !seen.has(tag))
+  const next = [...incoming, ...existing].slice(0, RECENT_TAGS_LIMIT)
+  try {
+    localStorage.setItem(RECENT_TAGS_STORAGE_KEY, JSON.stringify(next))
+  }
+  catch {
+    // ignore quota errors
+  }
 }

@@ -20,6 +20,7 @@ import {
   deriveDirectoryFromTags,
   getErrorMessage,
   normalizeStageCount,
+  rememberRecentTags,
 } from './utils'
 
 export type AddFilesResult = {
@@ -349,7 +350,9 @@ export function createPhotoUploadStore(params: PhotoUploadStoreParams): PhotoUpl
         uploadAbortController = controller
 
         try {
-          const directory = deriveDirectoryFromTags(get().selectedTags)
+          const tags = get().selectedTags
+          rememberRecentTags(tags)
+          const directory = deriveDirectoryFromTags(tags)
           const fileList = createFileList(get().files)
           await onUpload(fileList, {
             signal: controller.signal,
