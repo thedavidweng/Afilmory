@@ -63,12 +63,6 @@
     "vite-plugin-checker": "0.13.0",
     "vite-tsconfig-paths": "6.1.1"
   },
-  "pnpm": {
-    "overrides": {
-      "motion": "12.38.0",
-      "motion-dom": "12.38.0"
-    }
-  },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
   },
