@@ -1,3 +1,6 @@
+import { SHARE_EMBED_SCRIPT } from '@afilmory/sdk'
+import { AllowPlaceholderTenant } from '@core/decorators/allow-placeholder.decorator'
+import { SkipTenantGuard } from '@core/decorators/skip-tenant.decorator'
 import { BizException, ErrorCode } from '@core/errors'
 import { ContextParam, Controller, createZodSchemaDto, Get, Query } from '@tsuki-hono/common'
 import type { Context } from 'hono'
@@ -18,6 +21,18 @@ export class StaticShareController {
     private readonly staticShareService: StaticShareService,
     private readonly staticDashboardService: StaticDashboardService,
   ) {}
+
+  @Get('/share/embed.js')
+  @SkipTenantGuard()
+  @AllowPlaceholderTenant()
+  async getEmbedScript() {
+    return new Response(SHARE_EMBED_SCRIPT, {
+      headers: {
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'public, max-age=300, s-maxage=86400',
+      },
+    })
+  }
 
   @Get('/share/iframe')
   async getStaticSharePage(@ContextParam() context: Context, @Query() query: ShareQueryDto) {
