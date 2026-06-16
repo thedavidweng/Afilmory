@@ -92,12 +92,7 @@ const ShareSheet: ModalComponent<ShareSheetProps> = ({ photo, blobSrc, dismiss }
 
   const embedCode = useMemo(() => {
     const base = resolvedBaseUrl || ''
-    return `<iframe
-  src="${base}/share/iframe?id=${photo.id}"
-  style="width: 100%; aspect-ratio: ${photo.width} / ${photo.height}"
-  allowTransparency
-  sandbox="allow-scripts allow-same-origin allow-popups"
-></iframe>`
+    return `<script async src="${base}/share/embed.js" data-afilmory-photo="${photo.id}" data-aspect="${photo.width}:${photo.height}" data-width="100%"></script>`
   }, [photo.height, photo.id, photo.width, resolvedBaseUrl])
 
   const shareTitle = photo.title || t('photo.share.default.title')
