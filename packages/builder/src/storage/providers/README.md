@@ -431,5 +431,5 @@ const publicUrl = await provider.generatePublicUrl(files[0].key)
 
 - **路径错误**：`libraryPath` 或 `distPath` 不是绝对路径会导致实例化失败。
 - **版本兼容**：若检测到非 4.x 版本，会输出告警，建议升级 Eagle。
-- **不支持的格式**：仅处理 `SUPPORTED_FORMATS` 中列出的扩展名（与其它提供商一致）。
+- **不支持的格式**：仅处理 `SUPPORTED_FORMATS` 中列出的扩展名（与其它提供商一致）。包含常见栅格格式（含 AVIF/HEIC）以及相机 RAW；不包含 `.jxl` 或 `.data` 等未支持/易误判的扩展名。
 - **权限限制**：确保进程具备对素材库与目标目录的读写权限。

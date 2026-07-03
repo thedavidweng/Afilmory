@@ -1,3 +1,4 @@
+import type { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -5,7 +6,7 @@ import type { PhotoManifestItem, PickedExif, ToneAnalysis } from '@afilmory/typi
 import { decompressUint8Array } from '@afilmory/utils'
 import type sharp from 'sharp'
 
-import { HEIC_FORMATS } from '../constants/index.js'
+import { usesOriginalBufferForExif } from '../constants/index.js'
 import { extractExifData } from '../image/exif.js'
 import { calculateHistogramAndAnalyzeTone } from '../image/histogram.js'
 import { generateThumbnailAndBlurhash, thumbnailExists } from '../image/thumbnail.js'
@@ -36,10 +37,10 @@ export async function processThumbnailAndBlurhash(
 
   // 检查是否可以复用现有数据
   if (
-    !options.isForceMode &&
-    !options.isForceThumbnails &&
-    existingItem?.thumbHash &&
-    (await thumbnailExists(photoId))
+    !options.isForceMode
+    && !options.isForceThumbnails
+    && existingItem?.thumbHash
+    && (await thumbnailExists(photoId))
   ) {
     try {
       const thumbnailPath = path.join(workdir, 'public/thumbnails', `${photoId}.jpg`)
@@ -54,7 +55,8 @@ export async function processThumbnailAndBlurhash(
         thumbnailBuffer,
         thumbHash: decompressUint8Array(existingItem.thumbHash),
       }
-    } catch (error) {
+    }
+    catch (error) {
       loggers.thumbnail.warn(`读取现有缩略图失败，重新生成：${photoId}`, error)
       // 继续执行生成逻辑
     }
@@ -95,11 +97,10 @@ export async function processExifData(
     return existingItem.exif
   }
 
-  // 提取新的 EXIF 数据
   const ext = path.extname(photoKey).toLowerCase()
-  const originalBuffer = HEIC_FORMATS.has(ext) ? rawImageBuffer : undefined
+  const originalBuffer = usesOriginalBufferForExif(ext) ? rawImageBuffer : undefined
 
-  return await extractExifData(imageBuffer, originalBuffer)
+  return await extractExifData(imageBuffer, originalBuffer, photoKey)
 }
 
 /**
