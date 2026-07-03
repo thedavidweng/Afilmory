@@ -1,5 +1,8 @@
-import { mkdir, unlink, writeFile } from 'node:fs/promises'
+import type { Buffer } from 'node:buffer'
+import crypto from 'node:crypto'
+import { unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 
 import type { PickedExif } from '@afilmory/typing'
 import { isNil, noop } from 'es-toolkit'
@@ -7,8 +10,9 @@ import type { ExifDateTime, Tags } from 'exiftool-vendored'
 import { ExifTool } from 'exiftool-vendored'
 
 import { getGlobalLoggers } from '../photo/logger-adapter.js'
+import { ensureImageProcessTempDir, IMAGE_PROCESS_TEMP_DIR } from './temp-workspace.js'
 
-const exiftool = new ExifTool({
+export const exiftool = new ExifTool({
   ...(process.env.EXIFTOOL_PATH ? { exiftoolPath: process.env.EXIFTOOL_PATH } : {}),
   taskTimeoutMillis: 30000,
 })
@@ -28,14 +32,26 @@ if (process.env.NODE_ENV !== 'development') {
   process.once('SIGTERM', closeExiftool)
 }
 
-// 提取 EXIF 数据
-export async function extractExifData(imageBuffer: Buffer, originalBuffer?: Buffer): Promise<PickedExif | null> {
+export function resolveExifTempExtension(sourceKey?: string, usingOriginalBuffer = false): string {
+  if (!usingOriginalBuffer || !sourceKey) {
+    return '.jpg'
+  }
+
+  return path.extname(sourceKey).toLowerCase() || '.bin'
+}
+
+export async function extractExifData(
+  imageBuffer: Buffer,
+  originalBuffer?: Buffer,
+  sourceKey?: string,
+): Promise<PickedExif | null> {
   const log = getGlobalLoggers().exif
 
-  await mkdir('/tmp/image_process', { recursive: true })
-  const tempImagePath = path.resolve('/tmp/image_process', `${crypto.randomUUID()}.jpg`)
+  const tempExtension = resolveExifTempExtension(sourceKey, Boolean(originalBuffer))
+  const tempImagePath = path.join(IMAGE_PROCESS_TEMP_DIR, `${crypto.randomUUID()}${tempExtension}`)
 
   try {
+    await ensureImageProcessTempDir()
     await writeFile(tempImagePath, originalBuffer || imageBuffer)
 
     log.info(`开始提取 EXIF 数据, 文件路径: ${tempImagePath}`)
@@ -55,10 +71,12 @@ export async function extractExifData(imageBuffer: Buffer, originalBuffer?: Buff
 
     log.success('EXIF 数据提取完成')
     return result
-  } catch (error) {
+  }
+  catch (error) {
     log.error('提取 EXIF 数据失败:', error)
     return null
-  } finally {
+  }
+  finally {
     await unlink(tempImagePath).catch(noop)
   }
 }
