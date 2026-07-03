@@ -1,7 +1,6 @@
 import { Buffer } from 'node:buffer'
 import crypto from 'node:crypto'
-import { mkdir, unlink, writeFile } from 'node:fs/promises'
-import os from 'node:os'
+import { unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import type { ImageMetadata } from '@afilmory/typing'
@@ -12,6 +11,7 @@ import sharp from 'sharp'
 import { HEIC_FORMATS, RAW_FORMATS } from '../constants/index.js'
 import { getGlobalLoggers } from '../photo/logger-adapter.js'
 import { exiftool } from './exif.js'
+import { ensureImageProcessTempDir, IMAGE_PROCESS_TEMP_DIR } from './temp-workspace.js'
 
 export async function getImageMetadataWithSharp(sharpInstance: sharp.Sharp): Promise<ImageMetadata | null> {
   const log = getGlobalLoggers().image
@@ -70,23 +70,30 @@ export async function convertHeicToJpeg(heicBuffer: Buffer): Promise<Buffer> {
   }
 }
 
-const RAW_PREVIEW_TAGS = ['JpgFromRaw', 'PreviewImage', 'OtherImage', 'ThumbnailImage']
+export const RAW_PREVIEW_TAGS = ['JpgFromRaw', 'PreviewImage', 'OtherImage', 'ThumbnailImage'] as const
+
+export const RAW_LOW_QUALITY_PREVIEW_TAG = 'ThumbnailImage' as const
+
+export function isLowQualityRawPreviewTag(tag: string): boolean {
+  return tag === RAW_LOW_QUALITY_PREVIEW_TAG
+}
 
 export async function extractRawPreviewToBuffer(rawBuffer: Buffer, key: string): Promise<Buffer> {
   const log = getGlobalLoggers().image
-  const tempDir = path.join(os.tmpdir(), 'afilmory_raw_process')
   const safeExt = path.extname(key).toLowerCase() || '.raw'
-  const tempRawPath = path.join(tempDir, `${crypto.randomUUID()}${safeExt}`)
-
-  await mkdir(tempDir, { recursive: true })
+  const tempRawPath = path.join(IMAGE_PROCESS_TEMP_DIR, `${crypto.randomUUID()}${safeExt}`)
 
   try {
+    await ensureImageProcessTempDir()
     await writeFile(tempRawPath, rawBuffer)
 
     for (const tag of RAW_PREVIEW_TAGS) {
       try {
         const previewBuffer = await exiftool.extractBinaryTagToBuffer(tag, tempRawPath)
         if (previewBuffer.length > 0) {
+          if (isLowQualityRawPreviewTag(tag)) {
+            log.warn(`RAW 仅找到 ThumbnailImage 嵌入预览（通常约 160×120），缩略图与影调分析质量可能下降：${key}`)
+          }
           log.success(`RAW 预览图提取完成 (${tag}, ${Math.round(previewBuffer.length / 1024)}KB)`)
           return previewBuffer
         }
