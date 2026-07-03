@@ -1,25 +1,16 @@
 {
   "compilerOptions": {
     "target": "ESNext",
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx",
     "lib": [
       "DOM",
       "DOM.Iterable",
       "ESNext"
     ],
-    "allowJs": false,
-    "skipLibCheck": true,
-    "esModuleInterop": false,
-    "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
+    "ignoreDeprecations": "6.0",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "skipDefaultLibCheck": true,
-    "noImplicitAny": false,
-    "noEmit": true,
-    "jsx": "preserve",
     "paths": {
       "@afilmory/builder/*": [
         "./src/*"
@@ -27,17 +18,24 @@
       "@pkg": [
         "./package.json"
       ],
-      "@builder": [
-        "../../builder.config.ts"
-      ],
       "@env": [
         "../../env.ts"
       ]
     },
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "strict": true,
+    "noImplicitAny": false,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true
   },
   "include": [
     "./src/**/*",
-    "./scripts/**/*",
-    "../../apps/web/src/lib/histogram.ts"
+    "./scripts/**/*"
   ]
 }

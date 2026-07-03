@@ -1,11 +1,14 @@
 import path from 'node:path'
 
+import { getGlobalLoggers } from '@afilmory/builder/photo/logger-adapter.js'
+
 import { SUPPORTED_FORMATS } from '../../constants/index.js'
-import type { Logger } from '../../logger/index.js'
 import type {
   GitHubConfig,
+  ProgressCallback,
   StorageObject,
   StorageProvider,
+  StorageUploadOptions,
 } from '../interfaces.js'
 
 // GitHub API 响应类型
@@ -76,19 +79,36 @@ export class GitHubStorageProvider implements StorageProvider {
   private getFullPath(key: string): string {
     const normalizedKey = this.normalizeKey(key)
     if (this.githubConfig.path) {
-      return `${this.githubConfig.path}/${normalizedKey}`.replaceAll(
-        /\/+/g,
-        '/',
-      )
+      return `${this.githubConfig.path}/${normalizedKey}`.replaceAll(/\/+/g, '/')
     }
     return normalizedKey
   }
 
-  async getFile(key: string, logger?: Logger['s3']): Promise<Buffer | null> {
-    const log = logger
+  private async fetchContentMetadata(key: string): Promise<GitHubFileContent | null> {
+    const fullPath = this.getFullPath(key)
+    const url = `${this.baseApiUrl}/contents/${fullPath}?ref=${this.githubConfig.branch}`
+
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    })
+
+    if (response.status === 404) {
+      return null
+    }
+
+    if (!response.ok) {
+      throw new Error(`GitHub API 请求失败：${response.status} ${response.statusText}`)
+    }
+
+    const data = (await response.json()) as GitHubContent
+    return data.type === 'file' ? data : null
+  }
+
+  async getFile(key: string): Promise<Buffer | null> {
+    const logger = getGlobalLoggers().s3
 
     try {
-      log?.info(`下载文件：${key}`)
+      logger.info(`下载文件：${key}`)
       const startTime = Date.now()
 
       const fullPath = this.getFullPath(key)
@@ -100,18 +120,16 @@ export class GitHubStorageProvider implements StorageProvider {
 
       if (!response.ok) {
         if (response.status === 404) {
-          log?.warn(`文件不存在：${key}`)
+          logger.warn(`文件不存在：${key}`)
           return null
         }
-        throw new Error(
-          `GitHub API 请求失败：${response.status} ${response.statusText}`,
-        )
+        throw new Error(`GitHub API 请求失败：${response.status} ${response.statusText}`)
       }
 
       const data = (await response.json()) as GitHubFileContent
 
       if (data.type !== 'file') {
-        log?.error(`路径不是文件：${key}`)
+        logger.error(`路径不是文件：${key}`)
         return null
       }
 
@@ -121,9 +139,7 @@ export class GitHubStorageProvider implements StorageProvider {
         // 使用 download_url 获取文件内容（推荐方式）
         const fileResponse = await fetch(data.download_url)
         if (!fileResponse.ok) {
-          throw new Error(
-            `下载文件失败：${fileResponse.status} ${fileResponse.statusText}`,
-          )
+          throw new Error(`下载文件失败：${fileResponse.status} ${fileResponse.statusText}`)
         }
         const arrayBuffer = await fileResponse.arrayBuffer()
         fileBuffer = Buffer.from(arrayBuffer)
@@ -136,11 +152,11 @@ export class GitHubStorageProvider implements StorageProvider {
 
       const duration = Date.now() - startTime
       const sizeKB = Math.round(fileBuffer.length / 1024)
-      log?.success(`下载完成：${key} (${sizeKB}KB, ${duration}ms)`)
+      logger.success(`下载完成：${key} (${sizeKB}KB, ${duration}ms)`)
 
       return fileBuffer
     } catch (error) {
-      log?.error(`下载失败：${key}`, error)
+      logger.error(`下载失败：${key}`, error)
       return null
     }
   }
@@ -155,11 +171,11 @@ export class GitHubStorageProvider implements StorageProvider {
     })
   }
 
-  async listAllFiles(): Promise<StorageObject[]> {
+  async listAllFiles(progressCallback?: ProgressCallback): Promise<StorageObject[]> {
     const files: StorageObject[] = []
     const basePath = this.githubConfig.path || ''
 
-    await this.listFilesRecursive(basePath, files)
+    await this.listFilesRecursive(basePath, files, progressCallback)
 
     return files
   }
@@ -167,6 +183,7 @@ export class GitHubStorageProvider implements StorageProvider {
   private async listFilesRecursive(
     dirPath: string,
     files: StorageObject[],
+    progressCallback?: ProgressCallback,
   ): Promise<void> {
     try {
       const url = `${this.baseApiUrl}/contents/${dirPath}?ref=${this.githubConfig.branch}`
@@ -180,9 +197,7 @@ export class GitHubStorageProvider implements StorageProvider {
           // 目录不存在，返回空数组
           return
         }
-        throw new Error(
-          `GitHub API 请求失败：${response.status} ${response.statusText}`,
-        )
+        throw new Error(`GitHub API 请求失败：${response.status} ${response.statusText}`)
       }
 
       const contents = (await response.json()) as GitHubContent[]
@@ -192,10 +207,7 @@ export class GitHubStorageProvider implements StorageProvider {
           // 计算相对于配置路径的 key
           let key = item.path
           if (this.githubConfig.path) {
-            key = item.path.replace(
-              new RegExp(`^${this.githubConfig.path}/`),
-              '',
-            )
+            key = item.path.replace(new RegExp(`^${this.githubConfig.path}/`), '')
           }
 
           files.push({
@@ -207,7 +219,7 @@ export class GitHubStorageProvider implements StorageProvider {
           })
         } else if (item.type === 'dir') {
           // 递归处理子目录
-          await this.listFilesRecursive(item.path, files)
+          await this.listFilesRecursive(item.path, files, progressCallback)
         }
       }
     } catch (error) {
@@ -216,8 +228,124 @@ export class GitHubStorageProvider implements StorageProvider {
     }
   }
 
+  async deleteFile(key: string): Promise<void> {
+    const metadata = await this.fetchContentMetadata(key)
+    if (!metadata) {
+      return
+    }
+
+    const fullPath = this.getFullPath(key)
+    const url = `${this.baseApiUrl}/contents/${fullPath}`
+    const body = {
+      message: `Delete ${fullPath}`,
+      sha: metadata.sha,
+      branch: this.githubConfig.branch,
+    }
+
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      throw new Error(`GitHub 删除文件失败：${response.status} ${response.statusText}`)
+    }
+  }
+
+  async deleteFolder(prefix: string): Promise<void> {
+    const normalizedPrefix = this.normalizePrefix(prefix)
+    const targetPrefix = normalizedPrefix ? `${normalizedPrefix}/` : ''
+    const allFiles = await this.listAllFiles()
+    const keysToDelete = allFiles
+      .map((file) => file.key)
+      .filter((key): key is string => Boolean(key) && (!targetPrefix || key.startsWith(targetPrefix)))
+
+    for (const key of keysToDelete) {
+      await this.deleteFile(key)
+    }
+  }
+
+  async uploadFile(key: string, data: Buffer, _options?: StorageUploadOptions): Promise<StorageObject> {
+    const metadata = await this.fetchContentMetadata(key)
+    const fullPath = this.getFullPath(key)
+    const url = `${this.baseApiUrl}/contents/${fullPath}`
+
+    const payload: Record<string, unknown> = {
+      message: `Upload ${fullPath}`,
+      content: data.toString('base64'),
+      branch: this.githubConfig.branch,
+    }
+
+    if (metadata?.sha) {
+      payload.sha = metadata.sha
+    }
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      throw new Error(`GitHub 上传文件失败：${response.status} ${response.statusText}`)
+    }
+
+    const result = (await response.json()) as { content?: GitHubFileContent }
+    const content = result.content ?? (await this.fetchContentMetadata(key))
+
+    return {
+      key,
+      size: content?.size ?? data.byteLength,
+      lastModified: new Date(),
+      etag: content?.sha,
+    }
+  }
+
+  async moveFile(sourceKey: string, targetKey: string, options?: StorageUploadOptions): Promise<StorageObject> {
+    if (sourceKey === targetKey) {
+      const metadata = await this.fetchContentMetadata(sourceKey)
+      return {
+        key: targetKey,
+        size: metadata?.size,
+        lastModified: new Date(),
+        etag: metadata?.sha,
+      }
+    }
+
+    const buffer = await this.getFile(sourceKey)
+    if (!buffer) {
+      throw new Error(`GitHub move failed：源文件不存在 ${sourceKey}`)
+    }
+
+    const uploaded = await this.uploadFile(targetKey, buffer, options)
+    try {
+      await this.deleteFile(sourceKey)
+    } catch (error) {
+      try {
+        await this.deleteFile(targetKey)
+      } catch {
+        // ignore rollback failure
+      }
+      throw error
+    }
+    return uploaded
+  }
+
   generatePublicUrl(key: string): string {
     const fullPath = this.getFullPath(key)
+
+    // 如果设置了自定义 CDN 域名，直接使用
+    if (this.githubConfig.customDomain) {
+      const customDomain = this.githubConfig.customDomain.replace(/\/+$/, '') // 移除末尾的斜杠
+      return `https://${customDomain.replace(/^https?:\/\//, '')}/${fullPath}`
+    }
 
     if (this.githubConfig.useRawUrl) {
       // 使用 raw.githubusercontent.com 获取文件
@@ -238,7 +366,8 @@ export class GitHubStorageProvider implements StorageProvider {
       if (!obj.key) continue
 
       const dir = path.dirname(obj.key)
-      const basename = path.basename(obj.key, path.extname(obj.key))
+      // use path.parse to safely get the filename without extension (case-insensitive extension handling)
+      const basename = path.parse(obj.key).name
       const groupKey = `${dir}/${basename}`
 
       if (!fileGroups.has(groupKey)) {
@@ -261,8 +390,8 @@ export class GitHubStorageProvider implements StorageProvider {
         if (SUPPORTED_FORMATS.has(ext)) {
           imageFile = file
         }
-        // 检查是否为 .mov 视频文件
-        else if (ext === '.mov') {
+        // 检查是否为 .mov 或 .mp4 视频文件
+        else if (ext === '.mov' || ext === '.mp4') {
           videoFile = file
         }
       }
@@ -274,5 +403,9 @@ export class GitHubStorageProvider implements StorageProvider {
     }
 
     return livePhotoMap
+  }
+
+  private normalizePrefix(prefix: string): string {
+    return prefix.replaceAll('\\', '/').replaceAll(/^\/+|\/+$/g, '')
   }
 }

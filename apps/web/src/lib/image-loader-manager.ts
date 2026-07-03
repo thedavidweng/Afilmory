@@ -1,7 +1,12 @@
+import { fileTypeFromBlob } from 'file-type'
+
 import { i18nAtom } from '~/i18n'
+import { imageConverterManager } from '~/lib/image-convert'
 import { jotaiStore } from '~/lib/jotai'
 import { LRUCache } from '~/lib/lru-cache'
+import { extractMotionPhotoVideo } from '~/lib/motion-photo-extractor'
 import { convertMovToMp4, needsVideoConversion } from '~/lib/video-converter'
+import type { VideoSource } from '~/modules/viewer/types'
 
 export interface LoadingState {
   isVisible: boolean
@@ -10,6 +15,7 @@ export interface LoadingState {
   loadedBytes?: number
   totalBytes?: number
   isConverting?: boolean
+  isQueueWaiting?: boolean
   conversionMessage?: string
   codecInfo?: string
 }
@@ -37,20 +43,14 @@ export interface ImageCacheResult {
 }
 
 // Regular image cache using LRU cache
-const regularImageCache: LRUCache<string, ImageCacheResult> = new LRUCache<
-  string,
-  ImageCacheResult
->(
+const regularImageCache: LRUCache<string, ImageCacheResult> = new LRUCache<string, ImageCacheResult>(
   10, // Cache size for regular images
   (value, key, reason) => {
     try {
       URL.revokeObjectURL(value.blobSrc)
       console.info(`Regular image cache: Revoked blob URL - ${reason}`)
     } catch (error) {
-      console.warn(
-        `Failed to revoke regular image blob URL (${reason}):`,
-        error,
-      )
+      console.warn(`Failed to revoke regular image blob URL (${reason}):`, error)
     }
   },
 )
@@ -69,39 +69,41 @@ export class ImageLoaderManager {
 
   /**
    * 验证 Blob 是否为有效的图片格式
+   * 使用 magic number 检测文件类型，而不是依赖 MIME 类型
    */
-  private isValidImageBlob(blob: Blob): boolean {
-    // 检查 MIME 类型
-    const validImageTypes = [
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/webp',
-      'image/bmp',
-      'image/tiff',
-      'image/heic',
-      'image/heif',
-    ]
-
-    // 检查 Content-Type
-    if (!blob.type || !validImageTypes.includes(blob.type.toLowerCase())) {
-      console.warn(`Invalid image MIME type: ${blob.type}`)
-      return false
-    }
-
+  private async isValidImageBlob(blob: Blob): Promise<boolean> {
     // 检查文件大小（至少应该有一些字节）
     if (blob.size === 0) {
       console.warn('Empty blob detected')
       return false
     }
 
-    return true
+    try {
+      // 使用 magic number 检测文件类型
+      const fileType = await fileTypeFromBlob(blob)
+
+      if (!fileType) {
+        console.warn('Could not detect file type from blob')
+        return false
+      }
+
+      // 检查是否为图片格式
+      const isValidImage = fileType.mime.startsWith('image/')
+
+      if (!isValidImage) {
+        console.warn(`Invalid file type detected: ${fileType.ext} (${fileType.mime})`)
+        return false
+      }
+
+      console.info(`Valid image detected: ${fileType.ext} (${fileType.mime})`)
+      return true
+    } catch (error) {
+      console.error('Failed to detect file type:', error)
+      return false
+    }
   }
 
-  async loadImage(
-    src: string,
-    callbacks: LoadingCallbacks = {},
-  ): Promise<ImageLoadResult> {
+  async loadImage(src: string, callbacks: LoadingCallbacks = {}): Promise<ImageLoadResult> {
     const { onProgress, onError, onLoadingStateUpdate } = callbacks
 
     // Show loading indicator
@@ -120,7 +122,7 @@ export class ImageLoaderManager {
             try {
               // 验证响应是否为图片
               const blob = xhr.response as Blob
-              if (!this.isValidImageBlob(blob)) {
+              if (!(await this.isValidImageBlob(blob))) {
                 onLoadingStateUpdate?.({
                   isVisible: false,
                 })
@@ -182,8 +184,11 @@ export class ImageLoaderManager {
     })
   }
 
-  async processLivePhotoVideo(
-    livePhotoVideoUrl: string,
+  /**
+   * 处理视频（Live Photo 或 Motion Photo）
+   */
+  async processVideo(
+    videoSource: VideoSource,
     videoElement: HTMLVideoElement,
     callbacks: LoadingCallbacks = {},
   ): Promise<VideoProcessResult> {
@@ -191,24 +196,65 @@ export class ImageLoaderManager {
 
     return new Promise((resolve, reject) => {
       const processVideo = async () => {
+        const i18n = jotaiStore.get(i18nAtom)
+
         try {
-          // 检查是否需要转换
-          if (needsVideoConversion(livePhotoVideoUrl)) {
-            const result = await this.convertVideo(
-              livePhotoVideoUrl,
-              videoElement,
-              callbacks,
-            )
-            resolve(result)
+          // Pattern matching on VideoSource
+          if (videoSource.type === 'motion-photo') {
+            // Motion Photo: 从图片中提取嵌入视频
+            console.info('Processing Motion Photo embedded video...')
+            onLoadingStateUpdate?.({
+              isVisible: true,
+              conversionMessage: i18n.t('video.motion-photo.extracting'),
+            })
+
+            const extractedVideoUrl = await extractMotionPhotoVideo(videoSource.imageUrl, {
+              motionPhotoOffset: videoSource.offset,
+              motionPhotoVideoSize: videoSource.size,
+              presentationTimestampUs: videoSource.presentationTimestamp,
+            })
+
+            if (extractedVideoUrl) {
+              videoElement.src = extractedVideoUrl
+              videoElement.load()
+
+              console.info('Motion Photo video extracted successfully')
+
+              onLoadingStateUpdate?.({
+                isVisible: false,
+              })
+
+              const result = await new Promise<VideoProcessResult>((resolveVideo) => {
+                const handleVideoCanPlay = () => {
+                  videoElement.removeEventListener('canplaythrough', handleVideoCanPlay)
+                  resolveVideo({
+                    convertedVideoUrl: extractedVideoUrl,
+                    conversionMethod: 'motion-photo-extraction',
+                  })
+                }
+
+                videoElement.addEventListener('canplaythrough', handleVideoCanPlay)
+              })
+
+              resolve(result)
+            } else {
+              throw new Error('Failed to extract Motion Photo video')
+            }
+          } else if (videoSource.type === 'live-photo') {
+            // Live Photo: 处理独立视频文件
+            if (needsVideoConversion(videoSource.videoUrl)) {
+              const result = await this.convertVideo(videoSource.videoUrl, videoElement, callbacks)
+              resolve(result)
+            } else {
+              const result = await this.loadDirectVideo(videoSource.videoUrl, videoElement)
+              resolve(result)
+            }
           } else {
-            const result = await this.loadDirectVideo(
-              livePhotoVideoUrl,
-              videoElement,
-            )
-            resolve(result)
+            // type === 'none'
+            throw new Error('No video source provided')
           }
         } catch (error) {
-          console.error('Failed to process Live Photo video:', error)
+          console.error('Failed to process video:', error)
           onLoadingStateUpdate?.({
             isVisible: false,
           })
@@ -223,84 +269,52 @@ export class ImageLoaderManager {
 
   private async processImageBlob(
     blob: Blob,
-    originalUrl: string, // 添加原始 URL 参数
-    callbacks: LoadingCallbacks,
-  ): Promise<ImageLoadResult> {
-    const { onError: _onError, onLoadingStateUpdate } = callbacks
-
-    try {
-      // 动态导入 heic-converter 模块
-      const { detectHeicFormat, isBrowserSupportHeic } = await import(
-        '~/lib/heic-converter'
-      )
-
-      // 检测是否为 HEIC 格式
-      const shouldHeicTransformed =
-        !isBrowserSupportHeic() && (await detectHeicFormat(blob))
-
-      // Update loading indicator with HEIC format info
-      onLoadingStateUpdate?.({
-        isHeicFormat: shouldHeicTransformed,
-        loadingProgress: 100,
-        loadedBytes: blob.size,
-        totalBytes: blob.size,
-      })
-
-      if (shouldHeicTransformed) {
-        return await this.processHeicImage(blob, originalUrl, callbacks)
-      } else {
-        return this.processRegularImage(blob, originalUrl, callbacks) // 传递原始 URL
-      }
-    } catch (detectionError) {
-      console.error('Format detection failed:', detectionError)
-      // 如果检测失败，按普通图片处理
-      return this.processRegularImage(blob, originalUrl, callbacks) // 传递原始 URL
-    }
-  }
-
-  private async processHeicImage(
-    blob: Blob,
     originalUrl: string,
     callbacks: LoadingCallbacks,
   ): Promise<ImageLoadResult> {
     const { onError: _onError, onLoadingStateUpdate } = callbacks
 
-    // 如果是 HEIC 格式，进行转换
-    const i18n = jotaiStore.get(i18nAtom)
-    onLoadingStateUpdate?.({
-      isConverting: true,
-      conversionMessage: i18n.t('loading.heic.converting'),
-    })
-
     try {
-      // 动态导入 heic-converter 模块
-      const { convertHeicImage } = await import('~/lib/heic-converter')
+      // 使用策略模式检测并转换图像
+      const conversionResult = await imageConverterManager.convertImage(blob, originalUrl, callbacks)
 
-      const conversionResult = await convertHeicImage(blob, originalUrl)
+      if (conversionResult) {
+        // 需要转换的格式
+        console.info(
+          `Image converted: ${(blob.size / 1024).toFixed(1)}KB → ${(conversionResult.convertedSize / 1024).toFixed(1)}KB`,
+        )
 
-      // Hide loading indicator
-      onLoadingStateUpdate?.({
-        isVisible: false,
-      })
+        // Hide loading indicator
+        onLoadingStateUpdate?.({
+          isVisible: false,
+        })
 
-      console.info(
-        `HEIC converted: ${(blob.size / 1024).toFixed(1)}KB → ${(conversionResult.convertedSize / 1024).toFixed(1)}KB`,
-      )
-
-      return {
-        blobSrc: conversionResult.url,
-        convertedUrl: conversionResult.url,
+        return {
+          blobSrc: conversionResult.url,
+          convertedUrl: conversionResult.url,
+        }
+      } else {
+        // 不需要转换的普通图片
+        return this.processRegularImage(blob, originalUrl, callbacks)
       }
     } catch (conversionError) {
-      console.error('HEIC conversion failed:', conversionError)
+      console.error('Image conversion failed:', conversionError)
 
-      // Hide loading indicator on error
-      onLoadingStateUpdate?.({
-        isVisible: false,
-      })
+      // 转换失败时，尝试按普通图片处理
+      try {
+        console.info('Falling back to regular image processing')
+        return this.processRegularImage(blob, originalUrl, callbacks)
+      } catch (fallbackError) {
+        console.error('Fallback to regular image processing also failed:', fallbackError)
 
-      _onError?.()
-      throw conversionError
+        // Hide loading indicator on error
+        onLoadingStateUpdate?.({
+          isVisible: false,
+        })
+
+        _onError?.()
+        throw conversionError
+      }
     }
   }
 
@@ -340,9 +354,7 @@ export class ImageLoaderManager {
 
     // 缓存结果
     regularImageCache.set(cacheKey, result)
-    console.info(
-      `Regular image processed and cached: ${(blob.size / 1024).toFixed(1)}KB, URL: ${originalUrl}`,
-    )
+    console.info(`Regular image processed and cached: ${(blob.size / 1024).toFixed(1)}KB, URL: ${originalUrl}`)
 
     // Hide loading indicator
     onLoadingStateUpdate?.({
@@ -395,13 +407,12 @@ export class ImageLoaderManager {
 
     if (result.success && result.videoUrl) {
       const convertedVideoUrl = result.videoUrl
-      const conversionMethod = result.method || 'unknown'
 
       videoElement.src = result.videoUrl
       videoElement.load()
 
       console.info(
-        `Video conversion completed using ${result.method}. Size: ${result.convertedSize ? Math.round(result.convertedSize / 1024) : 'unknown'}KB`,
+        `Video conversion completed. Size: ${result.convertedSize ? Math.round(result.convertedSize / 1024) : 'unknown'}KB`,
       )
 
       onLoadingStateUpdate?.({
@@ -413,7 +424,6 @@ export class ImageLoaderManager {
           videoElement.removeEventListener('canplaythrough', handleVideoCanPlay)
           resolve({
             convertedVideoUrl,
-            conversionMethod,
           })
         }
 

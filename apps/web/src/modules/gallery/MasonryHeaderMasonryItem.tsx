@@ -1,24 +1,48 @@
-import { photoLoader } from '@afilmory/data'
-import { siteConfig } from '@config'
+import { clsxm } from '@afilmory/utils'
 import { repository } from '@pkg'
 import * as AvatarPrimitive from '@radix-ui/react-avatar'
 import { useTranslation } from 'react-i18next'
 
-import { clsxm } from '~/lib/cn'
+import { siteConfig } from '~/config'
+import { usePhotos } from '~/hooks/usePhotoViewer'
 
 import { ActionGroup } from './ActionGroup'
 
-const data = photoLoader.getPhotos()
+function resolveSocialUrl(
+  value: string,
+  { baseUrl, stripAt }: { baseUrl: string; stripAt?: boolean },
+): string | undefined {
+  const trimmed = value.trim()
 
-export const MasonryHeaderMasonryItem = ({
-  style,
-  className,
-}: {
-  style?: React.CSSProperties
-  className?: string
-}) => {
+  if (!trimmed) {
+    return undefined
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+
+  const normalized = stripAt ? trimmed.replace(/^@/, '') : trimmed
+  if (!normalized) {
+    return undefined
+  }
+  return `${baseUrl}${normalized}`
+}
+
+export const MasonryHeaderMasonryItem = ({ style, className }: { style?: React.CSSProperties; className?: string }) => {
   const { t } = useTranslation()
   const { i18n } = useTranslation()
+  const visiblePhotoCount = usePhotos().length
+  const githubUrl =
+    siteConfig.social && siteConfig.social.github
+      ? resolveSocialUrl(siteConfig.social.github, { baseUrl: 'https://github.com/' })
+      : undefined
+  const twitterUrl =
+    siteConfig.social && siteConfig.social.twitter
+      ? resolveSocialUrl(siteConfig.social.twitter, { baseUrl: 'https://twitter.com/', stripAt: true })
+      : undefined
+  const hasRss = true
+
   return (
     <div
       className={clsxm(
@@ -33,10 +57,7 @@ export const MasonryHeaderMasonryItem = ({
           <div className="relative">
             {siteConfig.author.avatar && (
               <AvatarPrimitive.Root>
-                <AvatarPrimitive.Image
-                  src={siteConfig.author.avatar}
-                  className="size-16 rounded-full"
-                />
+                <AvatarPrimitive.Image src={siteConfig.author.avatar} className="size-16 rounded-full" />
                 <AvatarPrimitive.Fallback>
                   <div className="bg-material-medium size-16 rounded-full" />
                 </AvatarPrimitive.Fallback>
@@ -44,10 +65,8 @@ export const MasonryHeaderMasonryItem = ({
             )}
             <div
               className={clsxm(
-                'from-accent to-accent/80 inline-flex items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg',
-                siteConfig.author.avatar
-                  ? 'size-8 rounded absolute bottom-0 -right-3'
-                  : 'size-16 mb-4',
+                'from-accent to-accent/80 inline-flex items-center justify-center rounded-2xl bg-linear-to-br shadow-lg',
+                siteConfig.author.avatar ? 'size-8 rounded absolute bottom-0 -right-3' : 'size-16 mb-4',
               )}
             >
               <i className="i-mingcute-camera-2-line text-2xl text-white" />
@@ -55,16 +74,14 @@ export const MasonryHeaderMasonryItem = ({
           </div>
         </div>
 
-        <h2 className="mt-1 mb-1 text-2xl font-semibold text-gray-900 dark:text-white">
-          {siteConfig.name}
-        </h2>
+        <h2 className="mt-1 mb-1 text-2xl font-semibold text-gray-900 dark:text-white">{siteConfig.name}</h2>
 
         {/* Social media links */}
-        {siteConfig.social && (
+        {(githubUrl || twitterUrl || hasRss) && (
           <div className="mt-1 mb-3 flex items-center justify-center gap-3">
-            {siteConfig.social.github && (
+            {githubUrl && (
               <a
-                href={`https://github.com/${siteConfig.social.github}`}
+                href={githubUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-text-secondary flex items-center justify-center p-2 duration-200 hover:text-[#E7E8E8]"
@@ -73,9 +90,9 @@ export const MasonryHeaderMasonryItem = ({
                 <i className="i-mingcute-github-fill text-sm" />
               </a>
             )}
-            {siteConfig.social.twitter && (
+            {twitterUrl && (
               <a
-                href={`https://twitter.com/${siteConfig.social.twitter.replace('@', '')}`}
+                href={twitterUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-text-secondary flex items-center justify-center p-2 duration-200 hover:text-[#1da1f2]"
@@ -84,11 +101,21 @@ export const MasonryHeaderMasonryItem = ({
                 <i className="i-mingcute-twitter-fill text-sm" />
               </a>
             )}
+            {hasRss && (
+              <a
+                href="/feed.xml"
+                target="_blank"
+                className="text-text-secondary flex items-center justify-center p-2 duration-200 hover:text-[#ec672c]"
+                title="RSS"
+              >
+                <i className="i-mingcute-rss-2-fill text-sm" />
+              </a>
+            )}
           </div>
         )}
 
         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          {t('gallery.photos', { count: data?.length || 0 })}
+          {t('gallery.photos', { count: visiblePhotoCount || 0 })}
         </p>
       </div>
 

@@ -1,14 +1,17 @@
+import { join } from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { deserialize } from 'node:v8'
 
+import type { PhotoManifestItem } from '@afilmory/typing'
+
+import type { BuilderOptions } from './builder/builder.js'
+import { AfilmoryBuilder } from './builder/builder.js'
+import { loadBuilderConfig } from './config/index.js'
+import type { PluginRunState } from './plugins/manager.js'
 import type { StorageObject } from './storage/interfaces'
-import type { PhotoManifestItem } from './types/photo'
-import type {
-  BatchTaskMessage,
-  BatchTaskResult,
-  TaskMessage,
-  TaskResult,
-} from './worker/cluster-pool'
+import type { BuilderConfig } from './types/config.js'
+import type { BatchTaskMessage, BatchTaskResult, TaskMessage, TaskResult } from './worker/cluster-pool'
 
 // 新增接口定义
 interface WorkerInitMessage {
@@ -23,6 +26,7 @@ interface SharedData {
   existingManifestMap: Map<string, PhotoManifestItem>
   livePhotoMap: Map<string, StorageObject>
   imageObjects: StorageObject[]
+  builderConfig: BuilderConfig
 }
 
 // Worker 进程处理逻辑
@@ -36,11 +40,22 @@ export async function runAsWorker() {
   let imageObjects: StorageObject[]
   let existingManifestMap: Map<string, PhotoManifestItem>
   let livePhotoMap: Map<string, StorageObject>
+  let builder: AfilmoryBuilder
+  let pluginRunState: PluginRunState
+
+  // 安全发送消息到主进程（防止 EPIPE 错误）
+  const safeSend = (message: unknown) => {
+    try {
+      if (process.send && process.connected) {
+        process.send(message)
+      }
+    } catch {
+      // 主进程已关闭 IPC 通道，静默忽略
+    }
+  }
 
   // 初始化函数，从主进程接收共享数据
-  const initializeWorker = async (
-    serializedData: WorkerInitMessage['sharedData'],
-  ) => {
+  const initializeWorker = async (serializedData: WorkerInitMessage['sharedData']) => {
     if (isInitialized) return
 
     // 将数组重新转换为 Buffer，然后反序列化
@@ -51,6 +66,20 @@ export async function runAsWorker() {
     imageObjects = sharedData.imageObjects
     existingManifestMap = sharedData.existingManifestMap
     livePhotoMap = sharedData.livePhotoMap
+
+    // 主进程序列化时移除了 plugins（函数无法序列化），
+    // 从配置文件重新加载以获取完整的插件配置
+    const fullConfig = await loadBuilderConfig({
+      cwd: join(fileURLToPath(import.meta.url), '../../../..'),
+    })
+    const builderConfig: BuilderConfig = {
+      ...sharedData.builderConfig,
+      plugins: fullConfig.plugins,
+    }
+
+    builder = new AfilmoryBuilder(builderConfig)
+    await builder.ensurePluginsReady()
+    pluginRunState = builder.createPluginRunState()
 
     isInitialized = true
   }
@@ -99,6 +128,13 @@ export async function runAsWorker() {
         isForceThumbnails: process.env.FORCE_THUMBNAILS === 'true',
       }
 
+      const builderOptions: BuilderOptions = {
+        isForceMode: processorOptions.isForceMode,
+        isForceManifest: processorOptions.isForceManifest,
+        isForceThumbnails: processorOptions.isForceThumbnails,
+        concurrencyLimit: undefined,
+      }
+
       // 处理照片
       const result = await processPhoto(
         legacyObj,
@@ -108,6 +144,11 @@ export async function runAsWorker() {
         existingManifestMap,
         legacyLivePhotoMap,
         processorOptions,
+        builder,
+        {
+          runState: pluginRunState,
+          builderOptions,
+        },
       )
 
       // 发送结果回主进程
@@ -117,9 +158,7 @@ export async function runAsWorker() {
         result,
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     } catch (error) {
       // 发送错误回主进程
       const response: TaskResult = {
@@ -128,9 +167,7 @@ export async function runAsWorker() {
         error: error instanceof Error ? error.message : String(error),
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     }
   }
 
@@ -144,6 +181,17 @@ export async function runAsWorker() {
 
       const results: TaskResult[] = []
       const taskPromises: Promise<void>[] = []
+      const batchProcessorOptions = {
+        isForceMode: process.env.FORCE_MODE === 'true',
+        isForceManifest: process.env.FORCE_MANIFEST === 'true',
+        isForceThumbnails: process.env.FORCE_THUMBNAILS === 'true',
+      }
+      const batchBuilderOptions: BuilderOptions = {
+        isForceMode: batchProcessorOptions.isForceMode,
+        isForceManifest: batchProcessorOptions.isForceManifest,
+        isForceThumbnails: batchProcessorOptions.isForceThumbnails,
+        concurrencyLimit: undefined,
+      }
 
       // 创建所有任务的并发执行 Promise
       for (const task of message.tasks) {
@@ -179,10 +227,11 @@ export async function runAsWorker() {
               imageObjects.length,
               existingManifestMap,
               legacyLivePhotoMap,
+              batchProcessorOptions,
+              builder,
               {
-                isForceMode: process.env.FORCE_MODE === 'true',
-                isForceManifest: process.env.FORCE_MANIFEST === 'true',
-                isForceThumbnails: process.env.FORCE_THUMBNAILS === 'true',
+                runState: pluginRunState,
+                builderOptions: batchBuilderOptions,
               },
             )
 
@@ -214,9 +263,7 @@ export async function runAsWorker() {
         results,
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     } catch (error) {
       // 如果批量处理失败，为每个任务发送错误结果
       const results: TaskResult[] = message.tasks.map((task) => ({
@@ -230,23 +277,14 @@ export async function runAsWorker() {
         results,
       }
 
-      if (process.send) {
-        process.send(response)
-      }
+      safeSend(response)
     }
   }
 
   // 立即注册消息监听器
   process.on(
     'message',
-    async (
-      message:
-        | TaskMessage
-        | BatchTaskMessage
-        | WorkerInitMessage
-        | { type: 'shutdown' }
-        | { type: 'ping' },
-    ) => {
+    async (message: TaskMessage | BatchTaskMessage | WorkerInitMessage | { type: 'shutdown' } | { type: 'ping' }) => {
       if (message.type === 'shutdown') {
         process.removeAllListeners('message')
         return
@@ -254,9 +292,7 @@ export async function runAsWorker() {
 
       if (message.type === 'ping') {
         // 响应主进程的 ping，表示 worker 已准备好
-        if (process.send) {
-          process.send({ type: 'pong', workerId })
-        }
+        safeSend({ type: 'pong', workerId })
         return
       }
 
@@ -264,11 +300,9 @@ export async function runAsWorker() {
         // 处理初始化消息
         try {
           await initializeWorker(message.sharedData)
-          if (process.send) {
-            process.send({ type: 'init-complete', workerId })
-          }
+          safeSend({ type: 'init-complete', workerId })
         } catch (error) {
-          console.error('Worker 初始化失败:', error)
+          console.error('Worker initialization failed', error)
           process.exit(1)
         }
         return
@@ -302,7 +336,5 @@ export async function runAsWorker() {
   })
 
   // 告知主进程 worker 已准备好
-  if (process.send) {
-    process.send({ type: 'ready', workerId })
-  }
+  safeSend({ type: 'ready', workerId })
 }

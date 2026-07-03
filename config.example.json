@@ -10,15 +10,33 @@
     "avatar": "https://cdn.jsdelivr.net/gh/Innei/static@master/avatar.png"
   },
   "social": {
-    "twitter": "@__oQuery",
-    "github": "Innei"
+    "github": "",
+    "twitter": ""
   },
   "feed": {
     "folo": {
       "challenge": {
-        "feedId": "155982289762921472",
-        "userId": "41312624216137728"
+        "feedId": "",
+        "userId": ""
       }
+    }
+  },
+  "map": [
+    "maplibre"
+  ],
+  "mapStyle": "builtin",
+  "mapProjection": "mercator",
+  "beian": {
+    "icp": {
+      "enabled": false,
+      "number": "XICP备xxxxxxxx号",
+      "link": "https://beian.miit.gov.cn/"
+    },
+    "police": {
+      "enabled": false,
+      "number": "X公网安备xxxxxxxxxxxxxx号",
+      "code": "xxxxxxxxxxxxxx",
+      "icon": "https://example.com/beian.png"
     }
   }
 }

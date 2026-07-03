@@ -5,7 +5,7 @@
  */
 
 import * as React from 'react'
-import { useEffect, useImperativeHandle, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 
 import {
   defaultAlignmentAnimation,
@@ -51,61 +51,88 @@ export const WebGLImageViewer = ({
   }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const viewerRef = useRef<WebGLImageViewerEngine | null>(null)
+  const [tileOutlineEnabled, setTileOutlineEnabled] = useState(false)
 
-  const setDebugInfo = useRef((() => {}) as (debugInfo: any) => void)
+  const setDebugInfoRef = useRef((() => {}) as (debugInfo: any) => void)
+  const debugEnabled = Boolean(debug)
 
-  const config: Required<WebGLImageViewerProps> = useMemo(
+  const mergedWheel = useMemo(
     () => ({
-      src,
-      className,
-      width: width || 0,
-      height: height || 0,
-      initialScale,
-      minScale,
-      maxScale,
-      wheel: {
-        ...defaultWheelConfig,
-        ...wheel,
-      },
-      pinch: { ...defaultPinchConfig, ...pinch },
-      doubleClick: { ...defaultDoubleClickConfig, ...doubleClick },
-      panning: { ...defaultPanningConfig, ...panning },
-      limitToBounds,
-      centerOnInit,
-      smooth,
-      alignmentAnimation: {
-        ...defaultAlignmentAnimation,
-        ...alignmentAnimation,
-      },
-      velocityAnimation: { ...defaultVelocityAnimation, ...velocityAnimation },
-      onZoomChange: onZoomChange || (() => {}),
-      onImageCopied: onImageCopied || (() => {}),
-      onLoadingStateChange: onLoadingStateChange || (() => {}),
-      debug: debug || false,
+      ...defaultWheelConfig,
+      ...wheel,
     }),
-    [
-      src,
-      className,
-      width,
-      height,
-      initialScale,
-      minScale,
-      maxScale,
-      wheel,
-      pinch,
-      doubleClick,
-      panning,
-      limitToBounds,
-      centerOnInit,
-      smooth,
-      alignmentAnimation,
-      velocityAnimation,
-      onZoomChange,
-      onImageCopied,
-      onLoadingStateChange,
-      debug,
-    ],
+    [wheel],
   )
+
+  const mergedPinch = useMemo(
+    () => ({
+      ...defaultPinchConfig,
+      ...pinch,
+    }),
+    [pinch],
+  )
+
+  const mergedDoubleClick = useMemo(
+    () => ({
+      ...defaultDoubleClickConfig,
+      ...doubleClick,
+    }),
+    [doubleClick],
+  )
+
+  const mergedPanning = useMemo(
+    () => ({
+      ...defaultPanningConfig,
+      ...panning,
+    }),
+    [panning],
+  )
+
+  const mergedAlignmentAnimation = useMemo(
+    () => ({
+      ...defaultAlignmentAnimation,
+      ...alignmentAnimation,
+    }),
+    [alignmentAnimation],
+  )
+
+  const mergedVelocityAnimation = useMemo(
+    () => ({
+      ...defaultVelocityAnimation,
+      ...velocityAnimation,
+    }),
+    [velocityAnimation],
+  )
+
+  const callbacksRef = useRef<
+    Pick<Required<WebGLImageViewerProps>, 'onZoomChange' | 'onImageCopied' | 'onLoadingStateChange'>
+  >({
+    onZoomChange: onZoomChange || (() => {}),
+    onImageCopied: onImageCopied || (() => {}),
+    onLoadingStateChange: onLoadingStateChange || (() => {}),
+  })
+
+  callbacksRef.current = {
+    onZoomChange: onZoomChange || (() => {}),
+    onImageCopied: onImageCopied || (() => {}),
+    onLoadingStateChange: onLoadingStateChange || (() => {}),
+  }
+
+  const interactionConfigRef = useRef<
+    Pick<Required<WebGLImageViewerProps>, 'wheel' | 'pinch' | 'doubleClick' | 'panning'>
+  >({
+    wheel: mergedWheel,
+    pinch: mergedPinch,
+    doubleClick: mergedDoubleClick,
+    panning: mergedPanning,
+  })
+
+  interactionConfigRef.current = {
+    wheel: mergedWheel,
+    pinch: mergedPinch,
+    doubleClick: mergedDoubleClick,
+    panning: mergedPanning,
+  }
 
   useImperativeHandle(ref, () => ({
     zoomIn: (animated?: boolean) => viewerRef.current?.zoomIn(animated),
@@ -119,26 +146,76 @@ export const WebGLImageViewer = ({
 
     const webGLImageViewerEngine = new WebGLImageViewerEngine(
       canvasRef.current,
-      config,
-      debug ? setDebugInfo : undefined,
+      {
+        src,
+        className: '',
+        width: width || 0,
+        height: height || 0,
+        initialScale,
+        minScale,
+        maxScale,
+        wheel: interactionConfigRef.current.wheel,
+        pinch: interactionConfigRef.current.pinch,
+        doubleClick: interactionConfigRef.current.doubleClick,
+        panning: interactionConfigRef.current.panning,
+        limitToBounds,
+        centerOnInit,
+        smooth,
+        alignmentAnimation: mergedAlignmentAnimation,
+        velocityAnimation: mergedVelocityAnimation,
+        onZoomChange: callbacksRef.current.onZoomChange,
+        onImageCopied: callbacksRef.current.onImageCopied,
+        onLoadingStateChange: callbacksRef.current.onLoadingStateChange,
+        debug: debugEnabled,
+      },
+      debugEnabled ? setDebugInfoRef : undefined,
     )
 
     try {
       // 如果提供了尺寸，传递给loadImage进行优化
-      const preknownWidth = config.width > 0 ? config.width : undefined
-      const preknownHeight = config.height > 0 ? config.height : undefined
-      webGLImageViewerEngine
-        .loadImage(src, preknownWidth, preknownHeight)
-        .catch(console.error)
+      const preknownWidth = width && width > 0 ? width : undefined
+      const preknownHeight = height && height > 0 ? height : undefined
+      webGLImageViewerEngine.loadImage(src, preknownWidth, preknownHeight).catch(console.error)
       viewerRef.current = webGLImageViewerEngine
+      setTileOutlineEnabled(webGLImageViewerEngine.isTileOutlineEnabled())
     } catch (error) {
       console.error('Failed to initialize WebGL Image Viewer:', error)
     }
 
     return () => {
       webGLImageViewerEngine?.destroy()
+      viewerRef.current = null
     }
-  }, [src, config, debug])
+  }, [
+    src,
+    width,
+    height,
+    initialScale,
+    minScale,
+    maxScale,
+    limitToBounds,
+    centerOnInit,
+    smooth,
+    mergedAlignmentAnimation,
+    mergedVelocityAnimation,
+    debugEnabled,
+  ])
+
+  useEffect(() => {
+    viewerRef.current?.updateCallbacks(callbacksRef.current)
+  }, [onZoomChange, onImageCopied, onLoadingStateChange])
+
+  useEffect(() => {
+    viewerRef.current?.updateInteractionConfig(interactionConfigRef.current)
+  }, [mergedWheel, mergedPinch, mergedDoubleClick, mergedPanning])
+
+  const handleOutlineToggle = useCallback(
+    (enabled: boolean) => {
+      setTileOutlineEnabled(enabled)
+      viewerRef.current?.setTileOutlineEnabled(enabled)
+    },
+    [setTileOutlineEnabled],
+  )
 
   return (
     <div
@@ -168,9 +245,11 @@ export const WebGLImageViewer = ({
       />
       {debug && (
         <DebugInfoComponent
+          outlineEnabled={tileOutlineEnabled}
+          onToggleOutline={handleOutlineToggle}
           ref={(e) => {
             if (e) {
-              setDebugInfo.current = e.updateDebugInfo
+              setDebugInfoRef.current = e.updateDebugInfo
             }
           }}
         />
@@ -184,7 +263,4 @@ WebGLImageViewer.displayName = 'WebGLImageViewer'
 
 // 导出类型定义
 
-export {
-  type WebGLImageViewerProps,
-  type WebGLImageViewerRef,
-} from './interface'
+export { type WebGLImageViewerProps, type WebGLImageViewerRef } from './interface'

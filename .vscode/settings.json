@@ -9,6 +9,32 @@
     "**/node_modules": true,
     ".specstory": true
   },
+  "tailwindCSS.experimental.classRegex": [
+    [
+      "cn\\(([^)]*)\\)",
+      "[\"'`]([^\"'`]*).*?[\"'`]"
+    ],
+    [
+      "clsxm\\(([^)]*)\\)",
+      "[\"'`]([^\"'`]*).*?[\"'`]"
+    ],
+    [
+      "tv\\(([^)]*)\\)",
+      "(?:'|\"|`)([^']*)(?:'|\"|`)"
+    ],
+    [
+      "tw`([^`]*)`",
+      "([^`]*)"
+    ],
+    [
+      "[a-zA-Z]+[cC]lass[nN]ame[\"'`]?:\\s*[\"'`]([^\"'`]*)[\"'`]",
+      "([^\"'`]*)"
+    ],
+    [
+      "[a-zA-Z]+[cC]lass[nN]ame\\s*=\\s*[\"'`]([^\"'`]*)[\"'`]",
+      "([^\"'`]*)"
+    ]
+  ],
   // If you do not want to autofix some rules on save
   // You can put this in your user settings or workspace settings
   "eslint.codeActionsOnSave.rules": [
@@ -42,5 +68,8 @@
   ],
   "cSpell.words": [
     "Afilmory"
+  ],
+  "exportall.config.folderListener": [
+    "/apps/ssr/src/schemas"
   ]
 }

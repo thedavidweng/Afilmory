@@ -1,8 +1,6 @@
 {
   "version": 1,
-  "include": [
-    "/*"
-  ],
+  "include": ["/*"],
   "exclude": [
     "/thumbnails/*",
     "/*.ico",
@@ -12,7 +10,7 @@
     "/*.gif",
     "/*.svg",
     "/*.css",
-    "/site.webmanifest",
+    "/manifest.webmanifest",
     "/*.js",
     "/*.json",
     "/*.xml",

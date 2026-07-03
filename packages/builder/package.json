@@ -1,25 +1,56 @@
 {
   "name": "@afilmory/builder",
   "type": "module",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.2.2",
+  "description": "Afilmory Builder",
+  "author": "Innei",
+  "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*"
   },
   "scripts": {
-    "cli": "tsx src/cli.ts"
+    "build": "tsdown",
+    "bump": "nbump",
+    "cli": "tsx src/cli.ts",
+    "cluster": "tsx src/cluster/cli.ts",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.828.0",
-    "@aws-sdk/s3-request-presigner": "3.828.0",
+    "@afilmory/og-renderer": "workspace:*",
+    "@afilmory/typing": "workspace:*",
+    "@resvg/resvg-js": "2.6.2",
     "@vingle/bmp-js": "^0.2.5",
     "blurhash": "2.0.5",
-    "dotenv-expand": "12.0.2",
-    "execa": "9.6.0",
-    "exiftool-vendored": "30.2.0",
+    "c12": "4.0.0-beta.5",
+    "consola": "3.4.2",
+    "dotenv-expand": "catalog:",
+    "execa": "9.6.1",
+    "exiftool-vendored": "36.0.0",
+    "fast-xml-parser": "5.9.0",
     "heic-convert": "2.1.0",
-    "heic-to": "1.1.14",
-    "sharp": "0.34.2"
+    "heic-to": "1.5.2",
+    "nunjucks": "3.2.4",
+    "satori": "catalog:",
+    "sharp": "0.35.1",
+    "thumbhash": "0.1.1"
+  },
+  "devDependencies": {
+    "@afilmory/utils": "workspace:*",
+    "tsdown": "0.22.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.mjs",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      },
+      "./*": {
+        "types": "./dist/*.d.mts",
+        "import": "./dist/*.mjs"
+      }
+    }
   }
 }

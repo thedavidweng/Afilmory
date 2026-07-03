@@ -1,48 +1,29 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "lib": [
-      "DOM",
-      "DOM.Iterable",
-      "ESNext"
-    ],
-    "allowJs": false,
-    "skipLibCheck": true,
-    "esModuleInterop": false,
-    "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
+    "jsx": "preserve",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "ignoreDeprecations": "6.0",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "paths": {
+      "~/*": ["./src/*"],
+      "@pkg": ["./package.json"],
+      "@config": ["../../site.config.ts"],
+      "@env": ["../../env.ts"],
+      "@locales/*": ["../../locales/*"]
+    },
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "skipDefaultLibCheck": true,
+    "allowJs": false,
+    "strict": true,
     "noImplicitAny": false,
     "noEmit": true,
-    "jsx": "preserve",
-    "paths": {
-      "~/*": [
-        "./src/*"
-      ],
-      "@pkg": [
-        "./package.json"
-      ],
-      "@config": [
-        "../../site.config.ts"
-      ],
-      "@builder": [
-        "../../builder.config.ts"
-      ],
-      "@env": [
-        "../../env.ts"
-      ],
-      "@locales/*": [
-        "../../locales/*"
-      ]
-    },
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true
   },
-  "include": [
-    "./src/**/*",
-    "./scripts/**/*"
-  ]
+  "include": ["./src/**/*", "./scripts/**/*"]
 }

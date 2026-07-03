@@ -1,15 +1,13 @@
-import path from 'node:path'
+import type { PhotoManifestItem, ProcessPhotoResult } from '@afilmory/typing'
 
-import type { _Object } from '@aws-sdk/client-s3'
-
+import type { AfilmoryBuilder, BuilderOptions } from '../builder/builder.js'
 import { logger } from '../logger/index.js'
-import type { PhotoManifestItem, ProcessPhotoResult } from '../types/photo.js'
+import type { PluginRunState } from '../plugins/manager.js'
+import type { S3ObjectLike } from '../types/s3.js'
+import { createStorageKeyNormalizer, runWithPhotoExecutionContext } from './execution-context.js'
 import type { PhotoProcessingContext } from './image-pipeline.js'
 import { processPhotoWithPipeline } from './image-pipeline.js'
-import {
-  createPhotoProcessingLoggers,
-  setGlobalLoggers,
-} from './logger-adapter.js'
+import { createPhotoProcessingLoggers } from './logger-adapter.js'
 
 export interface PhotoProcessorOptions {
   isForceMode: boolean
@@ -19,13 +17,18 @@ export interface PhotoProcessorOptions {
 
 // 处理单张照片
 export async function processPhoto(
-  obj: _Object,
+  obj: S3ObjectLike,
   index: number,
   workerId: number,
   totalImages: number,
   existingManifestMap: Map<string, PhotoManifestItem>,
-  livePhotoMap: Map<string, _Object>,
+  livePhotoMap: Map<string, S3ObjectLike>,
   options: PhotoProcessorOptions,
+  builder: AfilmoryBuilder,
+  pluginRuntime: {
+    runState: PluginRunState
+    builderOptions: BuilderOptions
+  },
 ): Promise<ProcessPhotoResult> {
   const key = obj.Key
   if (!key) {
@@ -33,25 +36,35 @@ export async function processPhoto(
     return { item: null, type: 'failed' }
   }
 
-  const photoId = path.basename(key, path.extname(key))
   const existingItem = existingManifestMap.get(key)
-
-  // 创建并设置全局 logger
-  const photoLoggers = createPhotoProcessingLoggers(workerId, logger)
-  setGlobalLoggers(photoLoggers)
-
-  photoLoggers.image.info(`📸 [${index + 1}/${totalImages}] ${key}`)
 
   // 构建处理上下文
   const context: PhotoProcessingContext = {
     photoKey: key,
-    photoId,
     obj,
     existingItem,
     livePhotoMap,
     options,
+    pluginData: {},
   }
 
-  // 使用处理管道
-  return await processPhotoWithPipeline(context)
+  const storageManager = builder.getStorageManager()
+  const storageConfig = builder.getStorageConfig()
+  const photoLoggers = createPhotoProcessingLoggers(workerId, logger)
+
+  return await runWithPhotoExecutionContext(
+    {
+      builder,
+      storageManager,
+      storageConfig,
+      normalizeStorageKey: createStorageKeyNormalizer(storageConfig),
+      loggers: photoLoggers,
+    },
+    async () => {
+      photoLoggers.image.info(`📸 [${index + 1}/${totalImages}] ${key}`)
+
+      // 使用处理管道
+      return await processPhotoWithPipeline(context, pluginRuntime)
+    },
+  )
 }

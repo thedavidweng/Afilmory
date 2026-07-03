@@ -5,7 +5,7 @@
 # -----------------
 # Base stage
 # -----------------
-FROM node:20-alpine AS base
+FROM node:lts-alpine AS base
 WORKDIR /app
 RUN corepack enable
 
@@ -20,8 +20,16 @@ RUN sh ./scripts/preinstall.sh
 # Install all dependencies
 RUN pnpm install --frozen-lockfile
 
+# Copy zeroperl.wasm to web public directory before build.
+# @uswriting/exiftool depends on @6over3/zeroperl-ts which loads zeroperl.wasm via fetch("./zeroperl.wasm")
+# relative to the current page URL, so it must be available under both root and /photos/ paths.
+RUN mkdir -p apps/web/public/photos && \
+    find node_modules -name "zeroperl.wasm" -path "*/esm/*" -exec cp {} apps/web/public/ \; -exec cp {} apps/web/public/photos/ \; -quit
+
 ARG S3_ACCESS_KEY_ID
 ARG S3_SECRET_ACCESS_KEY
+ARG GIT_TOKEN
+ARG PG_CONNECTION_STRING
 # Build the app.
 # The build script in the ssr package.json handles building the web app first.
 RUN pnpm --filter=@afilmory/ssr build

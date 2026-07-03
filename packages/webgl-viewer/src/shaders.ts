@@ -31,10 +31,16 @@ export const FRAGMENT_SHADER_SOURCE = `
   precision mediump float;
   
   uniform sampler2D u_image;
+  uniform int u_renderMode;
+  uniform vec4 u_solidColor;
   varying vec2 v_texCoord;
   
   void main() {
-    gl_FragColor = texture2D(u_image, v_texCoord);
+    if (u_renderMode == 0) {
+      gl_FragColor = texture2D(u_image, v_texCoord);
+    } else {
+      gl_FragColor = u_solidColor;
+    }
   }
 `
 
@@ -45,11 +51,7 @@ export const FRAGMENT_SHADER_SOURCE = `
  * @param source 着色器源码
  * @returns 编译好的着色器
  */
-export function createShader(
-  gl: WebGLRenderingContext,
-  type: number,
-  source: string,
-): WebGLShader {
+export function createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type)!
   gl.shaderSource(shader, source)
   gl.compileShader(shader)

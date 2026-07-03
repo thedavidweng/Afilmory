@@ -24,6 +24,8 @@ export interface DebugInfoRef {
 interface DebugInfoProps {
   /** 组件引用 */
   ref: React.Ref<DebugInfoRef>
+  outlineEnabled?: boolean
+  onToggleOutline?: (value: boolean) => void
 }
 
 /**
@@ -61,9 +63,7 @@ const CollapsibleSection: React.FC<{
         </span>
         <span style={{ fontWeight: 'bold', fontSize: '11px' }}>{title}</span>
       </div>
-      {expanded && (
-        <div style={{ paddingLeft: '16px', fontSize: '11px' }}>{children}</div>
-      )}
+      {expanded && <div style={{ paddingLeft: '16px', fontSize: '11px' }}>{children}</div>}
     </div>
   )
 }
@@ -71,10 +71,7 @@ const CollapsibleSection: React.FC<{
 /**
  * 状态指示器组件
  */
-const StatusIndicator: React.FC<{ color: string; label: string }> = ({
-  color,
-  label,
-}) => (
+const StatusIndicator: React.FC<{ color: string; label: string }> = ({ color, label }) => (
   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
     <span
       style={{
@@ -98,7 +95,7 @@ const StatusIndicator: React.FC<{ color: string; label: string }> = ({
  * @param props 组件属性
  * @returns JSX 元素
  */
-const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
+const DebugInfoComponent = ({ ref, outlineEnabled, onToggleOutline }: DebugInfoProps) => {
   // 调试信息状态，包含所有需要显示的调试数据
   const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
 
@@ -198,6 +195,8 @@ const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
 
   if (!debugInfo) return null
 
+  const currentOutlineEnabled = outlineEnabled !== undefined ? outlineEnabled : (debugInfo.tileOutlinesEnabled ?? false)
+
   return (
     <div
       style={{
@@ -230,9 +229,7 @@ const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
           borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
         }}
       >
-        <span style={{ fontWeight: 'bold', fontSize: '12px' }}>
-          WebGL Debug
-        </span>
+        <span style={{ fontWeight: 'bold', fontSize: '12px' }}>WebGL Debug</span>
         <button
           type="button"
           style={{
@@ -255,6 +252,28 @@ const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
 
       {!collapsed && (
         <>
+          {onToggleOutline && (
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Tile Outline:</span>
+                <button
+                  type="button"
+                  style={{
+                    background: currentOutlineEnabled ? 'rgba(34, 197, 94, 0.25)' : 'rgba(148, 163, 184, 0.25)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    padding: '2px 6px',
+                    borderRadius: '3px',
+                  }}
+                  onClick={() => onToggleOutline(!currentOutlineEnabled)}
+                >
+                  {currentOutlineEnabled ? 'On' : 'Off'}
+                </button>
+              </div>
+            </div>
+          )}
           {/* 核心状态信息 - 始终显示 */}
           <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -269,10 +288,7 @@ const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Quality:</span>
-              <StatusIndicator
-                color={getQualityColor(debugInfo.quality)}
-                label={debugInfo.quality}
-              />
+              <StatusIndicator color={getQualityColor(debugInfo.quality)} label={debugInfo.quality} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Status:</span>
@@ -292,8 +308,7 @@ const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Position:</span>
               <span>
-                ({debugInfo.translateX.toFixed(0)},{' '}
-                {debugInfo.translateY.toFixed(0)})
+                ({debugInfo.translateX.toFixed(0)}, {debugInfo.translateY.toFixed(0)})
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -354,8 +369,7 @@ const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Active LODs:</span>
               <span>
-                {debugInfo.memory.activeLODs} /{' '}
-                {debugInfo.memory.maxConcurrentLODs}
+                {debugInfo.memory.activeLODs} / {debugInfo.memory.maxConcurrentLODs}
               </span>
             </div>
           </CollapsibleSection>
@@ -369,10 +383,7 @@ const DebugInfoComponent = ({ ref }: DebugInfoProps) => {
         <div style={{ fontSize: '10px', opacity: 0.8 }}>
           <div>
             Scale: {debugInfo.scale.toFixed(2)} | LOD: {debugInfo.currentLOD} |{' '}
-            <StatusIndicator
-              color={getQualityColor(debugInfo.quality)}
-              label={debugInfo.quality}
-            />
+            <StatusIndicator color={getQualityColor(debugInfo.quality)} label={debugInfo.quality} />
           </div>
         </div>
       )}

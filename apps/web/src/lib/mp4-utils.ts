@@ -1,3 +1,5 @@
+import { getI18n } from '~/i18n'
+
 interface ConversionProgress {
   isConverting: boolean
   progress: number
@@ -9,7 +11,6 @@ interface ConversionResult {
   videoUrl?: string
   error?: string
   convertedSize?: number
-  method?: 'transmux'
 }
 
 interface TransmuxOptions {
@@ -20,10 +21,7 @@ interface TransmuxOptions {
  * Convert MOV to MP4 using transmux (re-muxing without re-encoding)
  * This preserves original video quality while changing container format
  */
-export async function transmuxMovToMp4(
-  videoUrl: string,
-  options: TransmuxOptions = {},
-): Promise<ConversionResult> {
+export async function transmuxMovToMp4(videoUrl: string, options: TransmuxOptions = {}): Promise<ConversionResult> {
   try {
     return await transmuxMovToMp4Simple(videoUrl, options)
   } catch (error) {
@@ -48,10 +46,11 @@ export async function transmuxMovToMp4Simple(
   try {
     console.info(`🎯 Starting simple transmux conversion`)
 
+    const { t } = getI18n()
     onProgress?.({
       isConverting: true,
       progress: 10,
-      message: 'Fetching video file...',
+      message: t('video.conversion.transmux.fetching'),
     })
 
     // Fetch the video file
@@ -65,13 +64,13 @@ export async function transmuxMovToMp4Simple(
     onProgress?.({
       isConverting: true,
       progress: 30,
-      message: 'Analyzing MOV structure...',
+      message: t('video.conversion.transmux.analyzing'),
     })
 
     onProgress?.({
       isConverting: true,
       progress: 60,
-      message: 'Converting container format...',
+      message: t('video.conversion.transmux.converting'),
     })
 
     // For now, we'll create a simple container change
@@ -84,7 +83,7 @@ export async function transmuxMovToMp4Simple(
     onProgress?.({
       isConverting: true,
       progress: 80,
-      message: 'Creating MP4 container...',
+      message: t('video.conversion.transmux.creating'),
     })
 
     // Create blob with MP4 MIME type
@@ -94,14 +93,13 @@ export async function transmuxMovToMp4Simple(
     onProgress?.({
       isConverting: false,
       progress: 100,
-      message: 'Transmux completed successfully',
+      message: t('video.conversion.transmux.success'),
     })
 
     return {
       success: true,
       videoUrl: convertedUrl,
       convertedSize: blob.size,
-      method: 'transmux',
     }
   } catch (error) {
     console.error('Simple transmux error:', error)

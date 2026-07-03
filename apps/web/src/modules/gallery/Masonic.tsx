@@ -1,27 +1,16 @@
 // @copy internal masonic hooks
-import {
-  clearRequestTimeout,
-  requestTimeout,
-} from '@essentials/request-timeout'
+import { useScrollViewElement } from '@afilmory/ui'
+import { clearRequestTimeout, requestTimeout } from '@essentials/request-timeout'
 import { useWindowSize } from '@react-hook/window-size'
 import { isEqual, throttle } from 'es-toolkit/compat'
-import type {
-  ContainerPosition,
-  MasonryProps,
-  MasonryScrollerProps,
-  Positioner,
-} from 'masonic'
-import {
-  createResizeObserver,
-  useMasonry,
-  usePositioner,
-  useScrollToIndex,
-} from 'masonic'
+import type { ContainerPosition, MasonryProps, MasonryScrollerProps, Positioner } from 'masonic'
+import { createResizeObserver, useMasonry, usePositioner, useScrollToIndex } from 'masonic'
 import { useForceUpdate } from 'motion/react'
 import * as React from 'react'
 
-import { useScrollViewElement } from '~/components/ui/scroll-areas/hooks'
-
+export interface MasonryRef {
+  reposition: () => void
+}
 /**
  * A "batteries included" masonry grid which includes all of the implementation details below. This component is the
  * easiest way to get off and running in your app, before switching to more advanced implementations, if necessary.
@@ -30,7 +19,7 @@ import { useScrollViewElement } from '~/components/ui/scroll-areas/hooks'
  *
  * @param props
  */
-export const Masonry = <Item,>(props: MasonryProps<Item>) => {
+export const Masonry = <Item,>(props: MasonryProps<Item> & { ref?: React.Ref<MasonryRef> }) => {
   const [scrollTop, setScrollTop] = React.useState(0)
   const [isScrolling, setIsScrolling] = React.useState(false)
   const scrollElement = useScrollViewElement()
@@ -91,6 +80,14 @@ export const Masonry = <Item,>(props: MasonryProps<Item>) => {
     props,
   ) as any
 
+  const [positionIndex, setPositionIndex] = React.useState(0)
+
+  React.useImperativeHandle(props.ref, () => ({
+    reposition: () => {
+      setPositionIndex((i) => i + 1)
+    },
+  }))
+
   // Workaround for https://github.com/jaredLunde/masonic/issues/12
   const itemCounter = React.useRef<number>(props.items.length)
 
@@ -102,7 +99,7 @@ export const Masonry = <Item,>(props: MasonryProps<Item>) => {
     itemCounter.current = props.items.length
   }
 
-  nextProps.positioner = usePositioner(nextProps, [shrunk && Math.random()])
+  nextProps.positioner = usePositioner(nextProps, [shrunk ? Math.random() + positionIndex : positionIndex])
 
   nextProps.resizeObserver = useResizeObserver(nextProps.positioner)
   nextProps.scrollTop = scrollTop
@@ -112,16 +109,10 @@ export const Masonry = <Item,>(props: MasonryProps<Item>) => {
   const scrollToIndex = useScrollToIndex(nextProps.positioner, {
     height: nextProps.height,
     offset: containerPos.offset,
-    align:
-      typeof props.scrollToIndex === 'object'
-        ? props.scrollToIndex.align
-        : void 0,
+    align: typeof props.scrollToIndex === 'object' ? props.scrollToIndex.align : void 0,
   })
   const index =
-    props.scrollToIndex &&
-    (typeof props.scrollToIndex === 'number'
-      ? props.scrollToIndex
-      : props.scrollToIndex.index)
+    props.scrollToIndex && (typeof props.scrollToIndex === 'number' ? props.scrollToIndex : props.scrollToIndex.index)
 
   React.useEffect(() => {
     if (index !== void 0) scrollToIndex(index)
@@ -195,10 +186,7 @@ function useContainerPosition(
         el = el.offsetParent as HTMLElement
       } while (el)
 
-      if (
-        offset !== containerPosition.offset ||
-        current.offsetWidth !== containerPosition.width
-      ) {
+      if (offset !== containerPosition.offset || current.offsetWidth !== containerPosition.width) {
         setContainerPosition({
           offset,
           width: current.offsetWidth,
@@ -231,10 +219,7 @@ function useContainerPosition(
 
 function useResizeObserver(positioner: Positioner) {
   const [forceUpdate] = useForceUpdate()
-  const resizeObserver = createResizeObserver(
-    positioner,
-    throttle(forceUpdate, 1000 / 12),
-  )
+  const resizeObserver = createResizeObserver(positioner, throttle(forceUpdate, 1000 / 12))
   // Cleans up the resize observers when they change or the
   // component unmounts
   React.useEffect(() => () => resizeObserver.disconnect(), [resizeObserver])

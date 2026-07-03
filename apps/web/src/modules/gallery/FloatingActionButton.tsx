@@ -1,31 +1,23 @@
+import { Button } from '@afilmory/ui'
+import { clsxm, Spring } from '@afilmory/utils'
 import type en from '@locales/app/en.json'
 import { AnimatePresence, m, useAnimation } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '~/components/ui/button'
-import { clsxm } from '~/lib/cn'
-import { Spring } from '~/lib/spring'
-
 type TranslationKeys = keyof typeof en
 
 const actions: {
-  id: string
+  id: 'view'
   icon: string
   title: TranslationKeys
 }[] = [
   {
-    id: 'sort',
-    icon: 'i-mingcute-sort-descending-line',
-    title: 'action.sort.mode',
+    id: 'view',
+    icon: 'i-mingcute-settings-3-line',
+    title: 'action.view.settings',
   },
-  { id: 'tags', icon: 'i-mingcute-tag-line', title: 'action.tag.filter' },
-  {
-    id: 'columns',
-    icon: 'i-mingcute-grid-line',
-    title: 'action.columns.setting',
-  },
-]
+] as const
 
 export type ActionType = (typeof actions)[number]['id']
 
@@ -35,7 +27,7 @@ const GlassButton = (props: React.ComponentProps<typeof Button>) => (
     className={clsxm(
       'rounded-full border-white/20 !bg-black/70 p-3 shadow-2xl backdrop-blur-2xl',
       'h-14 w-14 border',
-      'bg-gradient-to-br from-white/20 to-white/0',
+      'bg-linear-to-br from-white/20 to-white/0',
       'transition-colors duration-300 hover:border-white/30 hover:bg-black/10',
       props.className,
     )}
@@ -104,19 +96,10 @@ export const FloatingActionButton = ({
           exit={{ opacity: 0, scale: 0.8 }}
           transition={Spring.presets.snappy}
         >
-          <svg
-            width="0"
-            height="0"
-            className="absolute"
-            style={{ visibility: 'hidden' }}
-          >
+          <svg width="0" height="0" className="absolute" style={{ visibility: 'hidden' }}>
             <defs>
               <filter id="goo">
-                <feGaussianBlur
-                  in="SourceGraphic"
-                  stdDeviation="8"
-                  result="blur"
-                />
+                <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
                 <feColorMatrix
                   in="blur"
                   mode="matrix"
@@ -136,12 +119,7 @@ export const FloatingActionButton = ({
             variants={staggerVariants}
           >
             {actions.map((action, i) => (
-              <m.div
-                key={action.id}
-                custom={i}
-                variants={itemVariants}
-                className="absolute bottom-0"
-              >
+              <m.div key={action.id} custom={i} variants={itemVariants} className="absolute bottom-0">
                 <GlassButton
                   title={t(action.title)}
                   onClick={() => {
@@ -149,31 +127,18 @@ export const FloatingActionButton = ({
                     // setIsOpen(false)
                   }}
                 >
-                  <i className={clsxm(action.icon, 'text-xl text-accent')} />
+                  <i className={clsxm(action.icon, 'text-xl text-white')} />
                 </GlassButton>
               </m.div>
             ))}
 
-            <GlassButton
-              onClick={() => setIsOpen(!isOpen)}
-              className="relative z-10"
-            >
-              {isOpen && (
-                <m.div
-                  className="pointer-events-none absolute inset-0 rounded-full bg-white/20"
-                  initial={{ scale: 0, opacity: 0.7 }}
-                  animate={{ scale: 3, opacity: 0 }}
-                  transition={{ duration: 0.6, ease: 'easeOut' }}
-                />
-              )}
+            <GlassButton onClick={() => setIsOpen(!isOpen)} className="relative z-10">
               <AnimatePresence initial={false} mode="wait">
                 <m.i
                   key={isOpen ? 'close' : 'settings'}
                   className={clsxm(
-                    'absolute text-2xl text-accent',
-                    isOpen
-                      ? 'i-mingcute-close-line'
-                      : 'i-mingcute-settings-3-line',
+                    'absolute text-2xl text-white',
+                    isOpen ? 'i-mingcute-close-line' : 'i-mingcute-settings-3-line',
                   )}
                   initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
                   animate={{ opacity: 1, scale: 1, rotate: 0 }}
