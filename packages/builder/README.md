@@ -58,10 +58,22 @@ src/core/
 
 ### 4. 图像处理 (`image/`)
 
-- **processor.ts**: 图像预处理、HEIC 转换、元数据提取
+- **processor.ts**: 图像预处理、HEIC 转换、RAW 嵌入预览提取、元数据提取
 - **blurhash.ts**: Blurhash 生成算法
 - **thumbnail.ts**: 缩略图生成和管理
 - **exif.ts**: EXIF 数据提取和清理
+
+#### 支持的图片格式
+
+栅格格式（直接由 Sharp 处理）：`.jpg`、`.jpeg`、`.png`、`.webp`、`.bmp`、`.tiff`、`.tif`、`.avif`、`.heic`、`.heif`、`.hif`
+
+RAW 格式（通过 ExifTool 提取嵌入预览后再处理）：常见相机 RAW 扩展名，如 `.cr2`、`.cr3`、`.nef`、`.arw`、`.dng`、`.raf` 等（完整列表见 `src/constants/index.ts` 中的 `RAW_FORMATS`）。
+
+以下格式**不在**支持范围内：
+
+- `.jxl` — 当前 Sharp 版本不支持解码
+- `.data` — 扩展名过于宽泛，容易误匹配非摄影文件
+- 矢量/动图等非摄影格式（如 `.svg`、`.gif`）
 
 ### 5. 照片处理 (`photo/`)
 
