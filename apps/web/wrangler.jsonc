@@ -1,5 +1,6 @@
 {
-  "name": "afilmory-web",
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "afilmory",
   "compatibility_date": "2025-06-05",
   "pages_build_output_dir": "./dist"
 }
