@@ -1,3 +1,4 @@
+import type { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -10,12 +11,12 @@ import { generateBlurhash } from './blurhash.js'
 
 // 常量定义
 const THUMBNAIL_DIR = path.join(workdir, 'public/thumbnails')
-const THUMBNAIL_QUALITY = 100
+const THUMBNAIL_QUALITY = 80
 const THUMBNAIL_WIDTH = 600
 
 // 获取缩略图路径信息
-function getThumbnailPaths(photoId: string) {
-  const filename = `${photoId}.jpg`
+export function getThumbnailPaths(photoId: string) {
+  const filename = `${photoId}.webp`
   const thumbnailPath = path.join(THUMBNAIL_DIR, filename)
   const thumbnailUrl = `/thumbnails/${filename}`
 
@@ -55,7 +56,8 @@ export async function thumbnailExists(photoId: string): Promise<boolean> {
     const { thumbnailPath } = getThumbnailPaths(photoId)
     await fs.access(thumbnailPath)
     return true
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -72,7 +74,8 @@ async function processExistingThumbnail(photoId: string): Promise<ThumbnailResul
     const thumbHash = await generateBlurhash(existingBuffer)
 
     return createSuccessResult(thumbnailUrl, existingBuffer, thumbHash)
-  } catch (error) {
+  }
+  catch (error) {
     thumbnailLog?.warn(`读取现有缩略图失败，重新生成：${photoId}`, error)
     return null
   }
@@ -100,7 +103,7 @@ async function generateNewThumbnail(
       .resize(THUMBNAIL_WIDTH, null, {
         withoutEnlargement: true,
       })
-      .jpeg({ quality: THUMBNAIL_QUALITY })
+      .webp({ quality: THUMBNAIL_QUALITY })
       .toBuffer()
 
     // 保存到文件
@@ -115,7 +118,8 @@ async function generateNewThumbnail(
     const thumbHash = await generateBlurhash(thumbnailBuffer)
 
     return createSuccessResult(thumbnailUrl, thumbnailBuffer, thumbHash)
-  } catch (error) {
+  }
+  catch (error) {
     log.error(`生成失败：${photoId}`, error)
     return createFailureResult()
   }
@@ -145,7 +149,8 @@ export async function generateThumbnailAndBlurhash(
 
     // 生成新的缩略图
     return await generateNewThumbnail(imageBuffer, photoId, limitInputPixels)
-  } catch (error) {
+  }
+  catch (error) {
     thumbnailLog.error(`处理失败：${photoId}`, error)
     return createFailureResult()
   }

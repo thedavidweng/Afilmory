@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path, { basename } from 'node:path'
 
 import { workdir } from '@afilmory/builder/path.js'
-import type { AfilmoryManifest, CameraInfo, LensInfo, PhotoManifestItem  } from '@afilmory/typing'
+import type { AfilmoryManifest, CameraInfo, LensInfo, PhotoManifestItem } from '@afilmory/typing'
 
 import { logger } from '../logger/index.js'
 import type { S3ObjectLike } from '../types/s3.js'
@@ -16,7 +16,8 @@ export async function loadExistingManifest(): Promise<AfilmoryManifest> {
   try {
     const manifestContent = await fs.readFile(manifestPath, 'utf-8')
     manifest = JSON.parse(manifestContent) as AfilmoryManifest
-  } catch {
+  }
+  catch {
     logger.fs.error('🔍 未找到 manifest 文件/解析失败，创建新的 manifest 文件...')
     await saveManifest([])
     return {
@@ -29,7 +30,9 @@ export async function loadExistingManifest(): Promise<AfilmoryManifest> {
 
   if (manifest.version !== CURRENT_MANIFEST_VERSION) {
     const migrated = await migrateManifestFileIfNeeded(manifest)
-    if (migrated) return migrated
+    if (migrated) {
+      return migrated
+    }
   }
 
   // 向后兼容：如果现有 manifest 没有 cameras 和 lenses 字段，则添加空数组
@@ -45,8 +48,12 @@ export async function loadExistingManifest(): Promise<AfilmoryManifest> {
 
 // 检查照片是否需要更新（基于最后修改时间）
 export function needsUpdate(existingItem: PhotoManifestItem | undefined, s3Object: S3ObjectLike): boolean {
-  if (!existingItem) return true
-  if (!s3Object.LastModified) return true
+  if (!existingItem) {
+    return true
+  }
+  if (!s3Object.LastModified) {
+    return true
+  }
 
   const existingModified = new Date(existingItem.lastModified)
   const s3Modified = s3Object.LastModified
@@ -96,10 +103,10 @@ export async function handleDeletedPhotos(items: PhotoManifestItem[]): Promise<n
   const allThumbnails = await fs.readdir(path.join(workdir, 'public/thumbnails'))
 
   // If thumbnails not in manifest, delete it
-  const manifestKeySet = new Set(items.map((item) => item.id))
+  const manifestKeySet = new Set(items.map(item => item.id))
 
   for (const thumbnail of allThumbnails) {
-    if (!manifestKeySet.has(basename(thumbnail, '.jpg'))) {
+    if (!manifestKeySet.has(basename(thumbnail, path.extname(thumbnail)))) {
       await fs.unlink(path.join(workdir, 'public/thumbnails', thumbnail))
       deletedCount++
     }
