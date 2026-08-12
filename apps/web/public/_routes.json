@@ -3,6 +3,7 @@
   "include": ["/*"],
   "exclude": [
     "/thumbnails/*",
+    "/og/*",
     "/*.ico",
     "/*.png",
     "/*.jpg",
@@ -10,6 +11,8 @@
     "/*.gif",
     "/*.svg",
     "/*.css",
+    "/*.webp",
+    "/*.avif",
     "/manifest.webmanifest",
     "/*.js",
     "/*.json",

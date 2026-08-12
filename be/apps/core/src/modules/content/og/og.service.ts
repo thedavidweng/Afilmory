@@ -1,7 +1,10 @@
+import { Buffer } from 'node:buffer'
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import process from 'node:process'
 
 import type { PhotoManifestItem } from '@afilmory/builder'
+import { guessImageContentType, toSatoriImageDataUrl } from '@afilmory/builder'
 import type { ExifInfo, HomepageOgTemplateProps, PhotoDimensions } from '@afilmory/og-renderer'
 import { renderHomepageOgImage, renderOgImage } from '@afilmory/og-renderer'
 import { BizException, ErrorCode } from '@core/errors'
@@ -16,6 +19,8 @@ import geistFontUrl from './assets/Geist-Medium.ttf?url'
 import harmonySansScMediumFontUrl from './assets/HarmonyOS_Sans_SC_Medium.ttf?url'
 
 const CACHE_CONTROL = 'public, max-age=31536000, stale-while-revalidate=31536000'
+const HTTP_URL_RE = /^https?:\/\//i
+const TRAILING_SLASHES_RE = /\/+$/
 
 interface ThumbnailCandidateResult {
   buffer: Buffer
@@ -66,7 +71,7 @@ export class OgService implements OnModuleDestroy {
 
   async render(context: Context, photoId: string): Promise<Response> {
     const manifest = await this.manifestService.getManifest()
-    const photo = manifest.data.find((entry) => entry.id === photoId)
+    const photo = manifest.data.find(entry => entry.id === photoId)
     if (!photo) {
       throw new BizException(ErrorCode.COMMON_NOT_FOUND, { message: 'Photo not found' })
     }
@@ -110,7 +115,7 @@ export class OgService implements OnModuleDestroy {
     const totalPhotos = manifest.data.length
     const uniqueTags = new Set<string>()
     manifest.data.forEach((photo) => {
-      photo.tags?.forEach((tag) => uniqueTags.add(tag))
+      photo.tags?.forEach(tag => uniqueTags.add(tag))
     })
     const uniqueCameras = manifest.cameras.length
 
@@ -172,7 +177,7 @@ export class OgService implements OnModuleDestroy {
     try {
       const fetched = await this.tryFetchUrl(avatarUrl)
       if (fetched) {
-        return this.bufferToDataUrl(fetched.buffer, fetched.contentType)
+        return await this.bufferToDataUrl(fetched.buffer, fetched.contentType)
       }
 
       // If direct fetch failed, try with context base URL
@@ -182,13 +187,14 @@ export class OgService implements OnModuleDestroy {
         const fullUrl = new URL(normalizedPath, base).toString()
         const fetched2 = await this.tryFetchUrl(fullUrl)
         if (fetched2) {
-          return this.bufferToDataUrl(fetched2.buffer, fetched2.contentType)
+          return await this.bufferToDataUrl(fetched2.buffer, fetched2.contentType)
         }
       }
 
       // If all fails, return the original URL (satori might be able to handle it)
       return avatarUrl
-    } catch {
+    }
+    catch {
       return avatarUrl
     }
   }
@@ -299,8 +305,8 @@ export class OgService implements OnModuleDestroy {
     const aperture = exif.FNumber ? `f/${exif.FNumber}` : null
     const iso = exif.ISO ?? null
     const shutterSpeed = exif.ExposureTime ? `${exif.ExposureTime}s` : null
-    const camera =
-      exif.Make && exif.Model ? `${exif.Make.trim()} ${exif.Model.trim()}`.trim() : (exif.Model ?? exif.Make ?? null)
+    const camera
+      = exif.Make && exif.Model ? `${exif.Make.trim()} ${exif.Model.trim()}`.trim() : (exif.Model ?? exif.Make ?? null)
 
     if (!focalLength && !aperture && !iso && !shutterSpeed && !camera) {
       return null
@@ -323,6 +329,9 @@ export class OgService implements OnModuleDestroy {
   }
 
   private async resolveThumbnailSrc(context: Context, photo: PhotoManifestItem): Promise<string | null> {
+    // Use the real gallery thumbnail path (WebP/JPEG/…). Do not rewrite extensions —
+    // display thumbs and share cards are separate pipelines. Share output is always PNG;
+    // WebP is only an in-memory composition source (converted for Satori below).
     const normalized = this.normalizeThumbnailPath(photo.thumbnailUrl)
     if (!normalized) {
       return null
@@ -333,16 +342,19 @@ export class OgService implements OnModuleDestroy {
       return null
     }
 
-    return this.bufferToDataUrl(fetched.buffer, fetched.contentType)
+    const contentType
+      = fetched.contentType && fetched.contentType !== 'application/octet-stream'
+        ? fetched.contentType
+        : guessImageContentType(normalized)
+
+    return toSatoriImageDataUrl(fetched.buffer, contentType)
   }
 
   private normalizeThumbnailPath(value?: string | null): string | null {
     if (!value) {
       return null
     }
-
-    const replaced = value.replace(/\.webp$/i, '.jpg')
-    return replaced
+    return value
   }
 
   private async fetchThumbnailBuffer(
@@ -372,7 +384,8 @@ export class OgService implements OnModuleDestroy {
         buffer: Buffer.from(arrayBuffer),
         contentType,
       }
-    } catch {
+    }
+    catch {
       return null
     }
   }
@@ -382,9 +395,10 @@ export class OgService implements OnModuleDestroy {
     const externalOverride = process.env.OG_THUMBNAIL_ORIGIN?.trim()
     const normalizedPath = thumbnailPath.startsWith('/') ? thumbnailPath : `/${thumbnailPath}`
 
-    if (thumbnailPath.startsWith('http://') || thumbnailPath.startsWith('https://')) {
+    if (HTTP_URL_RE.test(thumbnailPath)) {
       result.push(thumbnailPath)
-    } else {
+    }
+    else {
       const base = this.resolveBaseUrl(context)
       if (base) {
         result.push(new URL(normalizedPath, base).toString())
@@ -394,7 +408,7 @@ export class OgService implements OnModuleDestroy {
       }
 
       if (externalOverride) {
-        result.push(`${externalOverride.replace(/\/+$/, '')}${normalizedPath}`)
+        result.push(`${externalOverride.replace(TRAILING_SLASHES_RE, '')}${normalizedPath}`)
       }
     }
 
@@ -410,19 +424,22 @@ export class OgService implements OnModuleDestroy {
       const protocol = forwardedProto ?? (host.includes('localhost') ? 'http' : 'https')
       try {
         return new URL(`${protocol}://${host}`)
-      } catch {
+      }
+      catch {
         return null
       }
     }
 
     try {
       return new URL(context.req.url)
-    } catch {
+    }
+    catch {
       return null
     }
   }
 
-  private bufferToDataUrl(buffer: Buffer, contentType: string): string {
-    return `data:${contentType};base64,${buffer.toString('base64')}`
+  private async bufferToDataUrl(buffer: Buffer, contentType: string): Promise<string> {
+    // Author avatars and other embeds also go through Satori — normalize for safety.
+    return toSatoriImageDataUrl(buffer, contentType)
   }
 }

@@ -1,4 +1,6 @@
+import { Buffer } from 'node:buffer'
 import { resolve } from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 import type { PhotoManifestItem } from '@afilmory/builder'
@@ -37,6 +39,8 @@ const STATIC_WEB_ROOT_CANDIDATES = Array.from(
 )
 
 const DOM_PARSER = new DOMParser()
+const HTTP_URL_RE = /^https?:\/\//i
+const TRAILING_SLASH_RE = /\/$/
 const STATIC_WEB_ASSET_LINK_RELS = [
   'stylesheet',
   'modulepreload',
@@ -62,7 +66,7 @@ export class StaticWebService extends StaticAssetService {
       rootCandidates: STATIC_WEB_ROOT_CANDIDATES,
       assetLinkRels: STATIC_WEB_ASSET_LINK_RELS,
       loggerName: 'StaticWebService',
-      staticAssetHostResolver: (requestHost) => this.staticAssetHostService.getStaticAssetHost(requestHost),
+      staticAssetHostResolver: requestHost => this.staticAssetHostService.getStaticAssetHost(requestHost),
       devBuildCommand: {
         command: 'pnpm --filter @afilmory/web build',
         env: { BUILD_FOR_SERVER_SERVE: '1', AFILMORY_EMBED_MANIFEST: 'false' },
@@ -104,14 +108,15 @@ export class StaticWebService extends StaticAssetService {
       this.insertSocialMetaTags(document, {
         title: `${photo.id} on ${siteTitle}`,
         description: photo.description || '',
-        image: `${origin}/og/${photo.id}`,
+        image: this.resolveOgImageAbsoluteUrl(photo, origin),
         url: `${origin}/${photo.id}`,
       })
       this.injectFaviconLinks(document)
 
       const serialized = document.documentElement.outerHTML
       return this.createManualHtmlResponse(serialized, headers, 200)
-    } catch (error) {
+    }
+    catch (error) {
       this.logger.error('Failed to inject Open Graph tags for photo page', { error })
       return this.createManualHtmlResponse(html, headers, response.status)
     }
@@ -146,7 +151,8 @@ export class StaticWebService extends StaticAssetService {
 
       const serialized = document.documentElement.outerHTML
       return this.createManualHtmlResponse(serialized, headers, 200)
-    } catch (error) {
+    }
+    catch (error) {
       this.logger.error('Failed to inject Open Graph tags for homepage', { error })
       return this.createManualHtmlResponse(html, headers, response.status)
     }
@@ -211,9 +217,20 @@ export class StaticWebService extends StaticAssetService {
     manifestScript.textContent = `window.__MANIFEST__ = ${JSON.stringify(manifest)};`
   }
 
+  private resolveOgImageAbsoluteUrl(photo: PhotoManifestItem, origin: string): string {
+    const base = origin.replace(TRAILING_SLASH_RE, '')
+    if (photo.ogImageUrl) {
+      if (HTTP_URL_RE.test(photo.ogImageUrl)) {
+        return photo.ogImageUrl
+      }
+      return `${base}${photo.ogImageUrl.startsWith('/') ? photo.ogImageUrl : `/${photo.ogImageUrl}`}`
+    }
+    return `${base}/og/${photo.id}`
+  }
+
   private async findPhoto(photoId: string): Promise<PhotoManifestItem | null> {
     const manifest = await this.manifestService.getManifest()
-    const target = manifest.data.find((item) => item.id === photoId)
+    const target = manifest.data.find(item => item.id === photoId)
     return target ?? null
   }
 
@@ -233,7 +250,8 @@ export class StaticWebService extends StaticAssetService {
     try {
       const url = new URL(context.req.url)
       return url.origin
-    } catch {
+    }
+    catch {
       return null
     }
   }
@@ -258,7 +276,7 @@ export class StaticWebService extends StaticAssetService {
 
   private insertSocialMetaTags(
     document: StaticAssetDocument,
-    data: { title: string; description: string; image: string; url: string },
+    data: { title: string, description: string, image: string, url: string },
   ): void {
     const ogTags: Record<string, string> = {
       'og:type': 'website',

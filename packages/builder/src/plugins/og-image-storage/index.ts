@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { readFile, stat } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -8,6 +8,7 @@ import { renderOgImage } from '@afilmory/og-renderer'
 import type { PhotoManifestItem } from '@afilmory/typing'
 import type { SatoriOptions } from 'satori'
 
+import { guessImageContentType, toSatoriImageDataUrl } from '../../image/og-source.js'
 import type { Logger } from '../../logger/index.js'
 import { workdir } from '../../path.js'
 import { StorageManager } from '../../storage/index.js'
@@ -26,6 +27,8 @@ const ogAssetsDir = path.join(repoRoot, 'be/apps/core/src/modules/content/og/ass
 const PLUGIN_NAME = 'afilmory:og-image'
 const RUN_STATE_KEY = 'state'
 const DEFAULT_DIRECTORY = '.afilmory/og-images'
+/** Static SPA public path for share cards (same origin `/og/{id}.png`). */
+const DEFAULT_LOCAL_PUBLIC_DIR = 'og'
 const DEFAULT_CONTENT_TYPE = 'image/png'
 const DEFAULT_SITE_NAME = 'Photo Gallery'
 const DEFAULT_ACCENT_COLOR = '#007bff'
@@ -34,6 +37,10 @@ type UploadableStorageConfig = Exclude<StorageConfig, { provider: 'eagle' }>
 
 interface OgImagePluginOptions {
   enable?: boolean
+  /**
+   * Remote storage key prefix for uploaded OG PNGs.
+   * Defaults to `.afilmory/og-images`.
+   */
   directory?: string
   storageConfig?: UploadableStorageConfig
   contentType?: string
@@ -41,6 +48,21 @@ interface OgImagePluginOptions {
   accentColor?: string
   siteConfigPath?: string
   vendor?: OgVendorConfig
+  /**
+   * Write PNG share cards under `apps/web/public/og/{id}.png` so static hosts
+   * (Cloudflare Pages, etc.) can serve them at `/og/{id}.png` without a dynamic
+   * `/og/:id` API. Defaults to `true`.
+   *
+   * This is **not** a second gallery thumbnail — cards are 1200×628 composed PNGs
+   * for crawlers; gallery thumbs stay WebP under `/thumbnails/`.
+   */
+  localPublic?: boolean
+  /**
+   * Upload OG PNGs to remote storage (S3/GitHub/…). Defaults to `true` when a
+   * non-eagle storage provider is available. Set `false` for pure static deploys
+   * that only need `localPublic` files.
+   */
+  uploadRemote?: boolean
 }
 
 type OgVendorConfig = CloudflareMiddlewareVendorConfig
@@ -52,6 +74,8 @@ interface ResolvedPluginConfig {
   useDefaultStorage: boolean
   storageConfig: UploadableStorageConfig | null
   enabled: boolean
+  localPublic: boolean
+  uploadRemote: boolean
 }
 
 interface SiteMeta {
@@ -196,37 +220,22 @@ async function loadSiteMeta(options: OgImagePluginOptions, logger: Logger): Prom
   }
 }
 
-function bufferToDataUrl(buffer: Buffer, contentType: string): string {
-  const base64 = buffer.toString('base64')
-  return `data:${contentType};base64,${base64}`
-}
-
-function guessContentType(thumbnailUrl: string): string {
-  const lowered = thumbnailUrl.toLowerCase()
-  if (lowered.endsWith('.png')) {
-    return 'image/png'
-  }
-  if (lowered.endsWith('.webp')) {
-    return 'image/webp'
-  }
-  return 'image/jpeg'
-}
-
 async function resolveThumbnailDataUrl(
   item: PhotoManifestItem,
   pluginData: ThumbnailPluginData | undefined,
   logger: Logger,
 ): Promise<string | null> {
   // Prefer the in-memory thumbnail to avoid extra reads; fall back to URLs when needed.
+  // Gallery thumbs may be WebP — convert to a Satori-safe JPEG data URL (not stored).
   const thumbnailUrl = pluginData?.localUrl || item.thumbnailUrl
   if (!thumbnailUrl) {
     return null
   }
 
-  const contentType = guessContentType(thumbnailUrl)
+  const contentType = guessImageContentType(thumbnailUrl)
 
   if (pluginData?.buffer) {
-    return bufferToDataUrl(pluginData.buffer, contentType)
+    return toSatoriImageDataUrl(pluginData.buffer, contentType)
   }
 
   if (/^https?:\/\//i.test(thumbnailUrl)) {
@@ -234,7 +243,7 @@ async function resolveThumbnailDataUrl(
       const response = await fetch(thumbnailUrl)
       if (response.ok) {
         const arrayBuffer = await response.arrayBuffer()
-        return bufferToDataUrl(Buffer.from(arrayBuffer), response.headers.get('content-type') ?? contentType)
+        return toSatoriImageDataUrl(Buffer.from(arrayBuffer), response.headers.get('content-type') ?? contentType)
       }
     }
     catch (error) {
@@ -247,10 +256,31 @@ async function resolveThumbnailDataUrl(
 
   try {
     const localBuffer = await readFile(localPath)
-    return bufferToDataUrl(localBuffer, contentType)
+    return toSatoriImageDataUrl(localBuffer, contentType)
   }
   catch (error) {
     logger.thumbnail?.debug?.(`OG image plugin: could not read local thumbnail ${localPath}`, error)
+    return null
+  }
+}
+
+function localPublicOgPath(photoId: string): { filePath: string, publicUrl: string } {
+  const fileName = `${photoId}.png`
+  return {
+    filePath: path.join(workdir, 'public', DEFAULT_LOCAL_PUBLIC_DIR, fileName),
+    publicUrl: `/${DEFAULT_LOCAL_PUBLIC_DIR}/${fileName}`,
+  }
+}
+
+async function writeLocalPublicOg(photoId: string, png: Uint8Array, logger: Logger): Promise<string | null> {
+  const { filePath, publicUrl } = localPublicOgPath(photoId)
+  try {
+    await mkdir(path.dirname(filePath), { recursive: true })
+    await writeFile(filePath, Buffer.from(png))
+    return publicUrl
+  }
+  catch (error) {
+    logger.main.error(`OG image plugin: failed to write local public OG for ${photoId}`, error)
     return null
   }
 }
@@ -320,11 +350,15 @@ function createVendor(config: OgVendorConfig): OgVendor {
 }
 
 /**
- * Render Open Graph images for processed photos and upload them to remote storage.
+ * Render Open Graph PNG share cards for processed photos.
  *
- * The plugin reuses generated thumbnails as the image source, injects light EXIF
- * metadata, and caches uploads/URLs during a single builder run to reduce storage
- * churn.
+ * Dual pipeline (best practice):
+ * - Gallery thumbnails stay WebP under `/thumbnails/` (display only).
+ * - Share cards are 1200×628 PNGs (crawler-safe for X/LinkedIn/Slack/Discord/…).
+ *
+ * Optionally writes cards to `apps/web/public/og/` for static hosts and/or uploads
+ * them to remote storage. Reuses the WebP thumbnail as composition source (decoded
+ * via sharp → JPEG data URL in memory; not stored as a second thumb).
  */
 export default function ogImagePlugin(options: OgImagePluginOptions = {}): BuilderPlugin {
   let resolved: ResolvedPluginConfig | null = null
@@ -338,6 +372,7 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
         const enable = options.enable ?? true
         const directory = normalizeDirectory(options.directory)
         const contentType = options.contentType ?? DEFAULT_CONTENT_TYPE
+        const localPublic = options.localPublic ?? true
 
         if (options.vendor && !vendor) {
           try {
@@ -357,6 +392,8 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
             useDefaultStorage: true,
             storageConfig: null,
             enabled: false,
+            localPublic: false,
+            uploadRemote: false,
           }
           return
         }
@@ -365,7 +402,45 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
         const storageConfig = (options.storageConfig ?? fallbackStorage) as StorageConfig
 
         if (storageConfig.provider === 'eagle') {
-          logger.main.warn('OG image plugin does not support Eagle storage provider; plugin disabled.')
+          // Eagle cannot host remote OG objects; local public output still works.
+          const uploadRemote = options.uploadRemote ?? false
+          if (!localPublic && !uploadRemote) {
+            logger.main.warn(
+              'OG image plugin: Eagle storage cannot upload remote OG images and localPublic is off; plugin disabled.',
+            )
+            resolved = {
+              directory,
+              remotePrefix: '',
+              contentType,
+              useDefaultStorage: !options.storageConfig,
+              storageConfig: null,
+              enabled: false,
+              localPublic: false,
+              uploadRemote: false,
+            }
+            return
+          }
+
+          resolved = {
+            directory,
+            remotePrefix: '',
+            contentType,
+            useDefaultStorage: false,
+            storageConfig: null,
+            enabled: true,
+            localPublic,
+            uploadRemote: false,
+          }
+          logger.main.info(`OG image plugin: Eagle provider — remote upload disabled; localPublic=${localPublic}.`)
+          return
+        }
+
+        const uploadableConfig = storageConfig as UploadableStorageConfig
+        const remotePrefix = resolveRemotePrefix(uploadableConfig, directory)
+        const uploadRemote = options.uploadRemote ?? true
+
+        if (!localPublic && !uploadRemote) {
+          logger.main.warn('OG image plugin: both localPublic and uploadRemote are false; plugin disabled.')
           resolved = {
             directory,
             remotePrefix: '',
@@ -373,12 +448,11 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
             useDefaultStorage: !options.storageConfig,
             storageConfig: null,
             enabled: false,
+            localPublic: false,
+            uploadRemote: false,
           }
           return
         }
-
-        const uploadableConfig = storageConfig as UploadableStorageConfig
-        const remotePrefix = resolveRemotePrefix(uploadableConfig, directory)
 
         resolved = {
           directory,
@@ -387,14 +461,20 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
           useDefaultStorage: !options.storageConfig,
           storageConfig: uploadableConfig,
           enabled: true,
+          localPublic,
+          uploadRemote,
         }
 
-        if (!options.storageConfig) {
-          builder.getStorageManager().addExcludePrefix(remotePrefix)
+        if (uploadRemote) {
+          if (!options.storageConfig) {
+            builder.getStorageManager().addExcludePrefix(remotePrefix)
+          }
+          else {
+            externalStorageManager = new StorageManager(uploadableConfig)
+          }
         }
-        else {
-          externalStorageManager = new StorageManager(uploadableConfig)
-        }
+
+        logger.main.info(`OG image plugin enabled (localPublic=${localPublic}, uploadRemote=${uploadRemote}).`)
       },
       afterPhotoProcess: async ({ builder, payload, runShared, logger }) => {
         if (!resolved || !resolved.enabled) {
@@ -406,10 +486,14 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
           return
         }
 
-        const storageManager = resolved.useDefaultStorage ? builder.getStorageManager() : externalStorageManager
-        if (!storageManager) {
-          logger.main.warn('OG image plugin could not resolve storage manager. Skipping upload.')
-          return
+        const storageManager = resolved.uploadRemote
+          ? resolved.useDefaultStorage
+            ? builder.getStorageManager()
+            : externalStorageManager
+          : null
+
+        if (resolved.uploadRemote && !storageManager) {
+          logger.main.warn('OG image plugin could not resolve storage manager for remote upload.')
         }
 
         const state = getOrCreateRunState(runShared)
@@ -428,17 +512,25 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
         }
 
         const shouldRender = type !== 'skipped' || payload.options.isForceMode || payload.options.isForceManifest
-
-        const remoteKey = joinSegments(resolved.remotePrefix, `${item.id}.png`)
+        const remoteKey = resolved.uploadRemote ? joinSegments(resolved.remotePrefix, `${item.id}.png`) : ''
+        const localUrl = `/${DEFAULT_LOCAL_PUBLIC_DIR}/${item.id}.png`
 
         if (!shouldRender) {
-          try {
-            const remoteUrl = await storageManager.generatePublicUrl(remoteKey)
-            state.urlCache.set(remoteKey, remoteUrl)
-            item.ogImageUrl = remoteUrl
+          // Prefer same-origin static path when available; otherwise resolve remote URL.
+          if (resolved.localPublic) {
+            item.ogImageUrl = localUrl
+            return
           }
-          catch (error) {
-            logger.main.info(`OG image plugin: skipped rendering and could not resolve URL for ${remoteKey}.`, error)
+
+          if (storageManager && remoteKey) {
+            try {
+              const remoteUrl = await storageManager.generatePublicUrl(remoteKey)
+              state.urlCache.set(remoteKey, remoteUrl)
+              item.ogImageUrl = remoteUrl
+            }
+            catch (error) {
+              logger.main.info(`OG image plugin: skipped rendering and could not resolve URL for ${remoteKey}.`, error)
+            }
           }
           return
         }
@@ -463,37 +555,48 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
             fonts,
           })
 
-          const stateForUpload = state
-          if (
-            !stateForUpload.uploaded.has(remoteKey)
-            || payload.options.isForceMode
-            || payload.options.isForceManifest
-          ) {
-            try {
-              await storageManager.uploadFile(remoteKey, Buffer.from(png), {
-                contentType: resolved.contentType,
-              })
-              stateForUpload.uploaded.add(remoteKey)
+          let preferredUrl: string | null = null
+
+          if (resolved.localPublic) {
+            preferredUrl = await writeLocalPublicOg(item.id, png, logger)
+          }
+
+          if (resolved.uploadRemote && storageManager && remoteKey) {
+            const stateForUpload = state
+            if (
+              !stateForUpload.uploaded.has(remoteKey)
+              || payload.options.isForceMode
+              || payload.options.isForceManifest
+            ) {
+              try {
+                await storageManager.uploadFile(remoteKey, Buffer.from(png), {
+                  contentType: resolved.contentType,
+                })
+                stateForUpload.uploaded.add(remoteKey)
+              }
+              catch (error) {
+                logger.main.error(`OG image plugin: failed to upload ${remoteKey}`, error)
+              }
             }
-            catch (error) {
-              logger.main.error(`OG image plugin: failed to upload ${remoteKey}`, error)
-              return
+
+            if (!preferredUrl) {
+              let remoteUrl = stateForUpload.urlCache.get(remoteKey)
+              if (!remoteUrl) {
+                try {
+                  remoteUrl = await storageManager.generatePublicUrl(remoteKey)
+                  stateForUpload.urlCache.set(remoteKey, remoteUrl)
+                }
+                catch (error) {
+                  logger.main.error(`OG image plugin: failed to generate URL for ${remoteKey}`, error)
+                }
+              }
+              preferredUrl = remoteUrl ?? null
             }
           }
 
-          let remoteUrl = stateForUpload.urlCache.get(remoteKey)
-          if (!remoteUrl) {
-            try {
-              remoteUrl = await storageManager.generatePublicUrl(remoteKey)
-              stateForUpload.urlCache.set(remoteKey, remoteUrl)
-            }
-            catch (error) {
-              logger.main.error(`OG image plugin: failed to generate URL for ${remoteKey}`, error)
-              return
-            }
+          if (preferredUrl) {
+            item.ogImageUrl = preferredUrl
           }
-
-          item.ogImageUrl = remoteUrl
         }
         catch (error) {
           logger.main.error(`OG image plugin: failed to render OG image for ${item.id}`, error)
@@ -505,7 +608,11 @@ export default function ogImagePlugin(options: OgImagePluginOptions = {}): Build
         }
 
         try {
-          await vendor.build({ repoRoot, logger })
+          await vendor.build({
+            repoRoot,
+            logger,
+            localPublic: resolved?.localPublic ?? true,
+          })
         }
         catch (error) {
           logger.main.error('OG image plugin: vendor build step failed.', error)
