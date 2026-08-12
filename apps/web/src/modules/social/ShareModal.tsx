@@ -10,6 +10,7 @@ import { injectConfig, siteConfig } from '~/config'
 import type { PhotoManifest } from '~/types/photo'
 
 import { CopyButton } from './CopyButton'
+import { resolveOgPreviewUrl } from './resolve-og-preview-url'
 import { ShareActionButton } from './ShareActionButton'
 
 // OG image aspect ratio: 1200:628 (from og.renderer.tsx)
@@ -80,13 +81,11 @@ const ShareSheet: ModalComponent<ShareSheetProps> = ({ photo, blobSrc, dismiss }
     return `${resolvedBaseUrl}${pathname}`
   }, [photo.id, resolvedBaseUrl])
 
+  // Prefer prebuilt PNG share card (`ogImageUrl`, e.g. `/og/{id}.png` from the
+  // builder plugin). Fall back to dynamic `/og/{id}` (core/SSR) then static `.png`.
   const ogPreviewUrl = useMemo(() => {
-    const path = `/og/${photo.id}`
-    if (!resolvedBaseUrl) {
-      return path
-    }
-    return `${resolvedBaseUrl}${path}`
-  }, [photo.id, resolvedBaseUrl])
+    return resolveOgPreviewUrl(photo, resolvedBaseUrl)
+  }, [photo, resolvedBaseUrl])
 
   const canEmbed = injectConfig.useNext || injectConfig.useCloud
 
@@ -231,7 +230,19 @@ const ShareSheet: ModalComponent<ShareSheetProps> = ({ photo, blobSrc, dismiss }
               )}
               loading="lazy"
               onLoad={() => setIsOgImageLoading(false)}
-              onError={() => setIsOgImageLoading(false)}
+              onError={(event) => {
+                // Static hosts may only have `/og/{id}.png` (prebuilt), not dynamic `/og/{id}`.
+                const img = event.currentTarget
+                const staticPng = resolvedBaseUrl
+                  ? `${resolvedBaseUrl.replace(/\/$/, '')}/og/${photo.id}.png`
+                  : `/og/${photo.id}.png`
+                if (img.src !== staticPng && !img.dataset.ogFallback) {
+                  img.dataset.ogFallback = '1'
+                  img.src = staticPng
+                  return
+                }
+                setIsOgImageLoading(false)
+              }}
             />
           </div>
         </div>
@@ -301,6 +312,10 @@ async function downloadFile(url: string, filename: string) {
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error('Unable to download file')
+  }
+  const contentType = response.headers.get('content-type') ?? ''
+  if (contentType.includes('text/html')) {
+    throw new Error('OG preview returned HTML instead of an image')
   }
   const blob = await response.blob()
   const blobUrl = URL.createObjectURL(blob)

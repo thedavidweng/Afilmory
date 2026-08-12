@@ -1,6 +1,7 @@
 import os from 'node:os'
+import process from 'node:process'
 
-import { defineBuilderConfig, githubRepoSyncPlugin } from '@afilmory/builder'
+import { defineBuilderConfig, githubRepoSyncPlugin, ogImagePlugin } from '@afilmory/builder'
 
 import { env } from './env.js'
 
@@ -57,6 +58,13 @@ export default defineBuilderConfig(() => ({
   },
   // plugins: [thumbnailStoragePlugin()],
   plugins: [
+    // WebP thumbs for the gallery + PNG Open Graph share cards (not a second thumb).
+    // localPublic → apps/web/public/og/{id}.png for static hosts; set uploadRemote
+    // true if you also want cards on S3/GitHub under `.afilmory/og-images/`.
+    ogImagePlugin({
+      localPublic: true,
+      uploadRemote: false,
+    }),
     githubRepoSyncPlugin({
       repo: {
         enable: false,

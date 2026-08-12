@@ -8,7 +8,19 @@ import { injectConfigToDocument } from '~/lib/injectable'
 import { photoLoader } from '~/lib/photo-loader'
 
 type HtmlElement = ReturnType<typeof DOMParser.prototype.parseFromString>
-type OnlyHTMLDocument = HtmlElement extends infer T ? (T extends { [key: string]: any; head: any } ? T : never) : never
+type OnlyHTMLDocument = HtmlElement extends infer T ? (T extends { [key: string]: any, head: any } ? T : never) : never
+
+/** Prefer prebuilt PNG share card; fall back to dynamic `/og/{id}` PNG route. */
+function resolveOgImageAbsoluteUrl(photo: PhotoManifestItem, origin: string): string {
+  const base = origin.replace(/\/$/, '')
+  if (photo.ogImageUrl) {
+    if (/^https?:\/\//i.test(photo.ogImageUrl)) {
+      return photo.ogImageUrl
+    }
+    return `${base}${photo.ogImageUrl.startsWith('/') ? photo.ogImageUrl : `/${photo.ogImageUrl}`}`
+  }
+  return `${base}/og/${photo.id}`
+}
 
 export const handler = async (request: NextRequest, { params }: { params: Promise<{ photoId: string }> }) => {
   const { photoId } = await params
@@ -48,10 +60,10 @@ export const handler = async (request: NextRequest, { params }: { params: Promis
         'X-SSR': '1',
       },
     })
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Error generating SSR page:', error)
-    console.info('Falling back to static index.html')
-    console.info(error.message)
+    console.error('Falling back to static index.html', error)
 
     return new Response(indexHtml, {
       headers: { 'Content-Type': 'text/html' },
@@ -75,11 +87,13 @@ const createAndInsertOpenGraphMeta = (document: OnlyHTMLDocument, photo: PhotoMa
     realOrigin = `${xForwardedHeaders['x-forwarded-proto'] || 'https'}://${xForwardedHeaders['x-forwarded-host']}`
   }
 
+  const ogImage = resolveOgImageAbsoluteUrl(photo, realOrigin)
+
   const ogTags = {
     'og:type': 'website',
     'og:title': `${photo.id} on ${siteConfig.title}`,
     'og:description': photo.description || '',
-    'og:image': `${realOrigin}/og/${photo.id}`,
+    'og:image': ogImage,
     'og:url': `${realOrigin}/${photo.id}`,
   }
 
@@ -95,7 +109,7 @@ const createAndInsertOpenGraphMeta = (document: OnlyHTMLDocument, photo: PhotoMa
     'twitter:card': 'summary_large_image',
     'twitter:title': `${photo.id} on ${siteConfig.title}`,
     'twitter:description': photo.description || '',
-    'twitter:image': `${realOrigin}/og/${photo.id}`,
+    'twitter:image': ogImage,
   }
 
   for (const [name, content] of Object.entries(twitterTags)) {

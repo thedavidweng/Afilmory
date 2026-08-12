@@ -2,7 +2,7 @@
 title: Cloudflare Pages
 description: Guide to deploying Afilmory via Cloudflare Pages (manual deploys + GitHub Storage).
 createdAt: 2025-07-20T22:35:03+08:00
-lastModified: 2026-08-10T08:59:02+08:00
+lastModified: 2026-08-12T12:29:38+08:00
 order: 53
 ---
 
@@ -21,7 +21,7 @@ Afilmory 使用 **Cloudflare Pages** 托管静态画廊。为了保留 `*.pages.
 创建项目根目录下的 `builder.config.ts`（该文件已被 gitignore，不会提交）：
 
 ```typescript
-import { defineBuilderConfig } from '@afilmory/builder'
+import { defineBuilderConfig, ogImagePlugin } from '@afilmory/builder'
 
 export default defineBuilderConfig(() => ({
   storage: {
@@ -41,24 +41,38 @@ export default defineBuilderConfig(() => ({
       logging: { verbose: false, level: 'info', outputToFile: false },
     },
   },
-  plugins: [],
+  plugins: [
+    // Dual pipeline: WebP gallery thumbs + PNG share cards (not a second thumb).
+    // localPublic writes apps/web/public/og/{id}.png for Pages; uploadRemote=false
+    // keeps OG cards out of the photo-assets repo.
+    ogImagePlugin({
+      localPublic: true,
+      uploadRemote: false,
+      vendor: { type: 'cloudflare-middleware', mode: 'local' },
+    }),
+  ],
 }))
 ```
 
 > 照片支持直接存放 AVIF 格式（`SUPPORTED_FORMATS` 已包含 `.avif`）。原图体积小、支持 EXIF，适合 GitHub 存储。
+>
+> **缩略图 vs 分享图**：站内缩略图是 WebP（`/thumbnails/`）；分享 / `og:image` 是构建期生成的 PNG 卡片（`/og/{id}.png`）。社交平台吃的是 PNG，不是 WebP 缩略图。
 
 ## 2. 构建 & 部署
 
 ```bash
-# 构建 manifest（下载原图、生成缩略图与元数据），并构建 SPA，最后部署到 Pages
+# 首次或改动 OG 插件后，强制刷新 manifest + PNG share cards
+pnpm run build:manifest -- --force-manifest
+
+# 构建 manifest（下载原图、生成 WebP 缩略图 + PNG OG 卡），并构建 SPA，最后部署到 Pages
 pnpm --filter=@afilmory/web deploy:cloudflare
 ```
 
 等价于：
 
 ```bash
-pnpm run build:manifest   # 生成 apps/web/public/thumbnails + 嵌入 dist 的 manifest
-pnpm --filter web build   # 构建 apps/web/dist
+pnpm run build:manifest   # thumbnails + public/og/*.png + 嵌入 dist 的 manifest
+pnpm --filter web build   # 构建 apps/web/dist（含 /og 与 /thumbnails）
 cd apps/web && wrangler pages deploy  # 手动部署到 Pages 项目（wrangler.jsonc 里的 name）
 ```
 
@@ -73,8 +87,9 @@ cd apps/web && wrangler pages deploy  # 手动部署到 Pages 项目（wrangler.
 }
 ```
 
-- 构建产物自包含：manifest 通过 `window.__MANIFEST__` 注入 HTML，缩略图位于 `/thumbnails/`，OG 图片由构建期插件生成
-- `_routes.json` 的 exclude 列表让 `/thumbnails/*`、静态资源直接走静态服务，其余路径由 SPA 兜底
+- 构建产物自包含：manifest 通过 `window.__MANIFEST__` 注入 HTML；WebP 缩略图在 `/thumbnails/`；PNG 分享卡在 `/og/{id}.png`（`ogImagePlugin` 的 `localPublic`）
+- `_routes.json` 的 exclude 列表让 `/thumbnails/*`、`/og/*`、静态资源直接走静态服务，其余路径由 SPA 兜底
+- 可选：`vendor: { type: 'cloudflare-middleware', mode: 'local' }` 会生成 `apps/web/functions/_middleware.ts`，在 `/photos/{id}` 上把 `og:image` 改写成对应 PNG 卡
 
 ## 3. 关闭 GitHub 自动构建（重要）
 
@@ -96,4 +111,6 @@ cd apps/web && wrangler pages deploy  # 手动部署到 Pages 项目（wrangler.
 
 ## 与 SSR 的取舍
 
-SPA 静态部署不包含 `ssr`（Next.js）的动态能力：OG 图片与 SEO 标签在构建期生成（`og-image-storage` 插件），无法按请求实时生成。需要实时 OG/SSR 时请使用 `ssr` 应用或 SaaS 模式（`be/apps/core` 自带静态托管）。
+SPA 静态部署不包含 `ssr`（Next.js）的按请求动态 OG：分享卡在构建期写成 PNG（`ogImagePlugin`），Share 预览读 `photo.ogImageUrl`（`/og/{id}.png`）。
+
+需要实时 `/og/{id}`（无预生成）时，使用 `ssr` 或 SaaS（`be/apps/core`）：服务端仍从 **WebP 缩略图** 合成 **PNG** 卡，不会把 WebP 直接暴露给社交爬虫。

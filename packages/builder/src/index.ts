@@ -5,6 +5,7 @@ export { createDefaultBuilderConfig } from './config/defaults.js'
 export { defineBuilderConfig } from './config/helper.js'
 export type { LoadBuilderConfigOptions } from './config/index.js'
 export { resolveBuilderConfig } from './config/index.js'
+export { guessImageContentType, toSatoriImageDataUrl } from './image/og-source.js'
 export type { PhotoProcessingContext, ProcessedImageData } from './photo/image-pipeline.js'
 export {
   executePhotoProcessingPipeline,

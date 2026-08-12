@@ -21,8 +21,14 @@ const isHtmlResponse = (response: Response) => {
 const stripPhotosPrefix = (pathname: string) => pathname.replace(/^\/?photos\//, '').replace(/\/$/, '')
 
 const shouldRewriteMeta = (content: string | null | undefined) => {
-    if (!content) return false
-    return OG_IMAGE_PATTERN.test(content.trim())
+    // Always rewrite empty/default site OG image; also rewrite known homepage OG filenames.
+    if (!content) return true
+    const trimmed = content.trim()
+    if (!trimmed) return true
+    if (OG_IMAGE_PATTERN.test(trimmed)) return true
+    // Relative or same-host default assets
+    if (trimmed.startsWith('/og-image')) return true
+    return false
 }
 
 export async function onRequest(context: { request: Request; next: () => Promise<Response> }) {
