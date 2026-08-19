@@ -1,0 +1,91 @@
+---
+title: Cloudflare Workers
+description: 通过 Cloudflare Workers Static Assets 部署静态画廊（推荐方案；Pages 为遗留方案）。
+createdAt: 2026-08-19T12:00:00+08:00
+lastModified: 2026-08-19T12:10:28+08:00
+order: 53
+---
+
+# Cloudflare Workers 部署
+
+<Callout type="warning">
+**推荐方案**：Cloudflare 正在把 Pages 的能力逐步合并进 Workers（静态资源、边缘计算统一平台）。新部署请使用本指南。旧 Pages 部署见 [Cloudflare Pages](/deployment/cloudflare-pages)（已标记 outdated）。
+</Callout>
+
+Cloudflare Workers 免费额度即可托管静态站点：静态资源请求免费、CDN 全球加速，与 Pages 等价甚至更灵活 —— 同一份 `dist` 直接 `wrangler deploy`，不需要 Pages 的云端构建和构建环境变量。
+
+## 前置条件
+
+- Cloudflare 账户（免费版即可）
+- 本机安装 `wrangler` 并完成 `wrangler login`
+- 照片源：任意受支持的 [Storage Provider](/storage/providers)，推荐 **GitHub Storage**（免费、全球 CDN）
+- 已用 builder 处理照片（生成 WebP 缩略图 + PNG OG 卡片）
+
+## 1. 配置 wrangler.jsonc（Workers Static Assets）
+
+新建 `apps/web/wrangler.jsonc`：
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "afilmory",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
+```
+
+- `name` 是 Worker 名，也是 workers.dev URL 的第一段：`https://<name>.<账户子域>.workers.dev`（如 `afilmory.davydeng.workers.dev`）
+- `not_found_handling: "single-page-application"` 让 `/photos/{id}` 等前端路由回落到 `index.html`
+
+> 想换更好的 workers.dev 域名：Workers & Pages → **Your subdomain** → Change。账户子域先到先得，建议尽早把想要的子域抢下来。
+
+## 2. 构建
+
+```bash
+pnpm run build:manifest            # 生成 WebP 缩略图、PNG OG 卡片和 photos-manifest.json
+pnpm --filter @afilmory/web build  # 产物输出到 apps/web/dist
+```
+
+> `pnpm --filter web build` 的 precheck 会自动再跑一次 builder 保证 manifest 最新；失败请检查 `builder.config.ts` 和 storage 配置。
+
+## 3. 部署
+
+```bash
+npx wrangler deploy
+```
+
+部署完成后会打印 `https://afilmory.<账户子域>.workers.dev`。
+
+**自定义域名**：Worker → Settings → **Domains & Routes** → 添加 Custom domain，Cloudflare 自动签发证书，无需手动配置 DNS。
+
+## 4. 产物说明
+
+`dist/` 内以下内容开箱即用，全部是静态文件、零计算：
+
+| 资源 | 路径 |
+| --- | --- |
+| 画廊缩略图（WebP） | `/thumbnails/{id}.webp` |
+| PNG 分享卡片 | `/og/{id}.png` |
+| 照片元数据 | `/photos-manifest.json` |
+
+社交爬虫直接抓 `/og/{id}.png` 分享卡片，无需动态生成（与 Pages 上的行为一致）。
+
+## 5. 照片页 og:image 重写（可选）
+
+静态 `index.html` 只携带站点级 `og:image`。若希望爬虫访问 `/photos/{id}` 时拿到该照片对应的 PNG 卡片，有两种做法：
+
+- **Pages 模式**：builder 的 `ogImagePlugin` 会生成 `apps/web/functions/_middleware.ts`（Pages Functions），在 Pages 平台自动生效
+- **Workers 模式**：给 Worker 加 `assets` binding，在 `fetch` 中用 HTMLRewriter 做同样的 meta 重写（高级用法；大多数平台会先按分享 URL 渲染卡片，此步非必须）
+
+## 6. 从 Pages 迁移（可选）
+
+已有 Pages 项目无需删除：在 Pages 项目设置中添加 Redirect 规则，把旧 URL 重定向到新的 Workers URL，旧链接不会失效，两边可并存过渡。
+
+## 相关文档
+
+- [Cloudflare Pages（遗留）](/deployment/cloudflare-pages)
+- [Workers Static Assets - Cloudflare Docs](https://developers.cloudflare.com/workers/static-assets/)
+- [workers.dev 子域 - Cloudflare Docs](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/)
