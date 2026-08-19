@@ -1,14 +1,18 @@
 ---
 title: Cloudflare Pages
-description: Guide to deploying Afilmory via Cloudflare Pages (manual deploys + GitHub Storage).
+description: Guide to deploying Afilmory via Cloudflare Pages (manual deploys + GitHub Storage). Outdated — prefer Cloudflare Workers.
 createdAt: 2025-07-20T22:35:03+08:00
-lastModified: 2026-08-19T12:16:12+08:00
-order: 53
+lastModified: 2026-08-19T12:16:37+08:00
+order: 54
 ---
 
 # Cloudflare Pages 部署（手动部署模式）
 
-Afilmory 使用 **Cloudflare Pages** 托管静态画廊。为了保留 `*.pages.dev` 域名，部署采用**本地构建 + `wrangler pages deploy` 手动上传**模式（不用 GitHub 自动构建——自动构建依赖云端环境变量/配置文件，容易产出空站）。
+<Callout type="warning">
+**Outdated / 遗留方案**：Cloudflare 正在把 Pages 的能力合并进 Workers（静态资源、边缘计算统一平台）。本指南已过时；新部署请改用 [Cloudflare Workers](/deployment/cloudflare-workers)（Static Assets，同样免费，且不需要云端构建）。
+</Callout>
+
+Afilmory 使用 **Cloudflare Pages** 托管静态画廊。部署采用**本地构建 + `wrangler pages deploy` 手动上传**模式（不用 GitHub 自动构建——自动构建依赖云端环境变量/配置文件，容易产出空站）。
 
 ## Prerequisites
 

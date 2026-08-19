@@ -546,9 +546,9 @@ export const tocData: FileToc[] = [
     title: 'Cloudflare Pages',
     toc: [
       {
-        id: 'heading-cloudflare-pages-deployment',
+        id: 'heading-cloudflare-pages',
         level: 1,
-        text: 'Cloudflare Pages Deployment',
+        text: 'Cloudflare Pages 部署（手动部署模式）',
         children: [
           {
             id: 'heading-prerequisites',
@@ -557,101 +557,101 @@ export const tocData: FileToc[] = [
             children: [],
           },
           {
-            id: 'heading-quick-deploy',
+            id: 'heading-1-storage-providergithub',
             level: 2,
-            text: 'Quick Deploy',
+            text: '1. 配置 Storage Provider（GitHub 示例）',
             children: [],
           },
           {
-            id: 'heading-deployment-steps',
+            id: 'heading-2',
             level: 2,
-            text: 'Deployment Steps',
-            children: [
-              {
-                id: 'heading-step-1-connect-repository',
-                level: 3,
-                text: 'Step 1: Connect Repository',
-                children: [],
-              },
-              {
-                id: 'heading-step-2-configure-build-settings',
-                level: 3,
-                text: 'Step 2: Configure Build Settings',
-                children: [],
-              },
-              {
-                id: 'heading-step-3-deploy',
-                level: 3,
-                text: 'Step 3: Deploy',
-                children: [],
-              },
-            ],
-          },
-          {
-            id: 'heading-build-configuration',
-            level: 2,
-            text: 'Build Configuration',
-            children: [
-              {
-                id: 'heading-using-wranglertoml-optional',
-                level: 3,
-                text: 'Using wrangler.toml (Optional)',
-                children: [],
-              },
-              {
-                id: 'heading-environment-variables',
-                level: 3,
-                text: 'Environment Variables',
-                children: [],
-              },
-            ],
-          },
-          {
-            id: 'heading-custom-domain',
-            level: 2,
-            text: 'Custom Domain',
+            text: '2. 构建 & 部署',
             children: [],
           },
           {
-            id: 'heading-continuous-deployment',
+            id: 'heading-3-github',
             level: 2,
-            text: 'Continuous Deployment',
+            text: '3. 关闭 GitHub 自动构建（重要）',
             children: [],
           },
           {
-            id: 'heading-performance-features',
+            id: 'heading-4',
             level: 2,
-            text: 'Performance Features',
+            text: '4. 绑定自定义域名',
             children: [],
           },
           {
-            id: 'heading-build-limits',
+            id: 'heading-5',
             level: 2,
-            text: 'Build Limits',
+            text: '5. 限流与排障',
             children: [],
           },
           {
-            id: 'heading-troubleshooting',
+            id: 'heading-ssr',
             level: 2,
-            text: 'Troubleshooting',
+            text: '与 SSR 的取舍',
+            children: [],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    file: 'deployment/cloudflare-workers.mdx',
+    path: '/deployment/cloudflare-workers',
+    title: 'Cloudflare Workers',
+    toc: [
+      {
+        id: 'heading-cloudflare-workers',
+        level: 1,
+        text: 'Cloudflare Workers 部署',
+        children: [
+          {
+            id: 'heading-',
+            level: 2,
+            text: '前置条件',
             children: [],
           },
           {
-            id: 'heading-limitations',
+            id: 'heading-1-wranglerjsoncworkers-static-assets',
             level: 2,
-            text: 'Limitations',
+            text: '1. 配置 wrangler.jsonc（Workers Static Assets）',
             children: [],
           },
           {
-            id: 'heading-next-steps',
+            id: 'heading-2',
             level: 2,
-            text: 'Next Steps',
+            text: '2. 构建',
             children: [],
           },
           {
-            id: 'heading-learn-more',
+            id: 'heading-3',
             level: 2,
-            text: 'Learn more',
+            text: '3. 部署',
+            children: [],
+          },
+          {
+            id: 'heading-4',
+            level: 2,
+            text: '4. 产物说明',
+            children: [],
+          },
+          {
+            id: 'heading-5-ogimage',
+            level: 2,
+            text: '5. 照片页 og:image 重写（可选）',
+            children: [],
+          },
+          {
+            id: 'heading-6-pagesdev',
+            level: 2,
+            text: '6. 保留 pages.dev 域名',
+            children: [],
+          },
+          {
+            id: 'heading--1',
+            level: 2,
+            text: '相关文档',
             children: [],
           },
         ],
@@ -1951,13 +1951,13 @@ export const tocData: FileToc[] = [
 
 // Helper function to find TOC data by file path
 export function getTocByFile(filePath: string): TocItem[] | undefined {
-  const item = tocData.find((item) => item.file === filePath)
+  const item = tocData.find(item => item.file === filePath)
   return item?.toc
 }
 
 // Helper function to find TOC data by route path
 export function getTocByPath(routePath: string): TocItem[] | undefined {
-  const item = tocData.find((item) => item.path === routePath)
+  const item = tocData.find(item => item.path === routePath)
   return item?.toc
 }
 

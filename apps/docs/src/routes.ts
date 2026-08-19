@@ -9,18 +9,19 @@ import Route4 from '../contents/builder/config.mdx'
 import Route18 from '../contents/builder/index.mdx'
 import Route5 from '../contents/builder/pipeline.mdx'
 import Route6 from '../contents/builder/plugins.mdx'
-import Route22 from '../contents/deployment/cloudflare-pages.mdx'
+import Route23 from '../contents/deployment/cloudflare-pages.mdx'
+import Route22 from '../contents/deployment/cloudflare-workers.mdx'
 import Route20 from '../contents/deployment/docker.mdx'
 import Route21 from '../contents/deployment/github-pages.mdx'
 import Route19 from '../contents/deployment/index.mdx'
-import Route23 from '../contents/deployment/vercel.mdx'
-import Route26 from '../contents/docs-site.mdx'
+import Route24 from '../contents/deployment/vercel.mdx'
+import Route27 from '../contents/docs-site.mdx'
 import Route2 from '../contents/getting-started/quick-start.mdx'
 import Route0 from '../contents/index.mdx'
 import Route13 from '../contents/saas/architecture.mdx'
-import Route25 from '../contents/saas/cms.mdx'
+import Route26 from '../contents/saas/cms.mdx'
 import Route15 from '../contents/saas/deployment.mdx'
-import Route24 from '../contents/saas/index.mdx'
+import Route25 from '../contents/saas/index.mdx'
 import Route10 from '../contents/storage/providers/b2.mdx'
 import Route17 from '../contents/storage/providers/cos.mdx'
 import Route14 from '../contents/storage/providers/eagle.mdx'
@@ -202,7 +203,7 @@ export const routes: RouteConfig[] = [
       title: 'SaaS Architecture',
       description: 'Tenant model, domain routing, OAuth flow, and data injection paths.',
       createdAt: '2025-11-23T20:20:00+08:00',
-      lastModified: '2025-11-30T14:03:05+08:00',
+      lastModified: '2026-08-06T20:44:28+08:00',
       order: '36',
     },
   },
@@ -226,7 +227,7 @@ export const routes: RouteConfig[] = [
       title: 'SaaS Deployment',
       description: 'Deploy the multi-tenant stack (core API + OAuth gateway) with subdomains and custom domains.',
       createdAt: '2025-11-23T19:50:00+08:00',
-      lastModified: '2025-11-23T20:44:02+08:00',
+      lastModified: '2026-08-06T20:44:28+08:00',
       order: '37',
     },
   },
@@ -303,20 +304,33 @@ export const routes: RouteConfig[] = [
     },
   },
   {
-    path: '/deployment/cloudflare-pages',
+    path: '/deployment/cloudflare-workers',
     component: Route22,
-    title: 'Cloudflare Pages',
+    title: 'Cloudflare Workers',
     meta: {
-      title: 'Cloudflare Pages',
-      description: 'Guide to deploying Afilmory via Cloudflare Pages.',
-      createdAt: '2025-07-20T22:35:03+08:00',
-      lastModified: '2025-11-23T19:40:52+08:00',
+      title: 'Cloudflare Workers',
+      description: '通过 Cloudflare Workers Static Assets 部署静态画廊（推荐方案；Pages 为遗留方案）。',
+      createdAt: '2026-08-19T12:00:00+08:00',
+      lastModified: '2026-08-19T12:00:00+08:00',
       order: '53',
     },
   },
   {
-    path: '/deployment/vercel',
+    path: '/deployment/cloudflare-pages',
     component: Route23,
+    title: 'Cloudflare Pages',
+    meta: {
+      title: 'Cloudflare Pages',
+      description:
+        'Guide to deploying Afilmory via Cloudflare Pages (manual deploys + GitHub Storage). Outdated — prefer Cloudflare Workers.',
+      createdAt: '2025-07-20T22:35:03+08:00',
+      lastModified: '2026-08-19T12:00:00+08:00',
+      order: '54',
+    },
+  },
+  {
+    path: '/deployment/vercel',
+    component: Route24,
     title: 'Vercel',
     meta: {
       title: 'Vercel',
@@ -328,7 +342,7 @@ export const routes: RouteConfig[] = [
   },
   {
     path: '/saas',
-    component: Route24,
+    component: Route25,
     title: 'SaaS Mode',
     meta: {
       title: 'SaaS Mode',
@@ -340,7 +354,7 @@ export const routes: RouteConfig[] = [
   },
   {
     path: '/saas/cms',
-    component: Route25,
+    component: Route26,
     title: 'CMS & Live Updates',
     meta: {
       title: 'CMS & Live Updates',
@@ -352,7 +366,7 @@ export const routes: RouteConfig[] = [
   },
   {
     path: '/docs-site',
-    component: Route26,
+    component: Route27,
     title: 'Docs Site',
     meta: {
       title: 'Docs Site',

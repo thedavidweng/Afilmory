@@ -149,7 +149,7 @@
       "title": "SaaS Architecture",
       "description": "Tenant model, domain routing, OAuth flow, and data injection paths.",
       "createdAt": "2025-11-23T20:20:00+08:00",
-      "lastModified": "2025-11-30T14:03:05+08:00",
+      "lastModified": "2026-08-06T20:44:28+08:00",
       "order": "36"
     }
   },
@@ -171,7 +171,7 @@
       "title": "SaaS Deployment",
       "description": "Deploy the multi-tenant stack (core API + OAuth gateway) with subdomains and custom domains.",
       "createdAt": "2025-11-23T19:50:00+08:00",
-      "lastModified": "2025-11-23T20:44:02+08:00",
+      "lastModified": "2026-08-06T20:44:28+08:00",
       "order": "37"
     }
   },
@@ -242,14 +242,25 @@
     }
   },
   {
+    "path": "/deployment/cloudflare-workers",
+    "title": "Cloudflare Workers",
+    "meta": {
+      "title": "Cloudflare Workers",
+      "description": "通过 Cloudflare Workers Static Assets 部署静态画廊（推荐方案；Pages 为遗留方案）。",
+      "createdAt": "2026-08-19T12:00:00+08:00",
+      "lastModified": "2026-08-19T12:00:00+08:00",
+      "order": "53"
+    }
+  },
+  {
     "path": "/deployment/cloudflare-pages",
     "title": "Cloudflare Pages",
     "meta": {
       "title": "Cloudflare Pages",
-      "description": "Guide to deploying Afilmory via Cloudflare Pages.",
+      "description": "Guide to deploying Afilmory via Cloudflare Pages (manual deploys + GitHub Storage). Outdated — prefer Cloudflare Workers.",
       "createdAt": "2025-07-20T22:35:03+08:00",
-      "lastModified": "2025-11-23T19:40:52+08:00",
-      "order": "53"
+      "lastModified": "2026-08-19T12:00:00+08:00",
+      "order": "54"
     }
   },
   {

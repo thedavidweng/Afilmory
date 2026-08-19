@@ -3,10 +3,13 @@ import type { Element, MDXComponents } from 'mdx/types'
 
 import { useNavigation } from '../contexts/NavigationContext'
 import { routes } from '../routes'
+import { Callout } from './markdown/Callout'
 
 // 判断是否是站内链接
 function isInternalLink(href: string | undefined): boolean {
-  if (!href) return false
+  if (!href) {
+    return false
+  }
 
   // 纯锚点链接（以 # 开头），使用浏览器默认行为，不拦截
   if (href.startsWith('#')) {
@@ -87,6 +90,7 @@ function CustomLink({ href, children, ...props }: React.AnchorHTMLAttributes<HTM
 
 const components: MDXComponents = {
   a: CustomLink,
+  Callout,
 }
 
 export function MDX({ content }: { content: Element }) {
