@@ -45,6 +45,10 @@ const hyobanConfig = await defineConfig(
       },
     },
     rules: {
+      // Single-statement `if (x) return y` is the dominant repo style. hyoban's
+      // default `curly` (all) autofixes it into `{ return y }`, which then trips
+      // `style/max-statements-per-line` — the autofix output never passes lint.
+      'curly': ['error', 'multi-line'],
       'unicorn/prefer-response-static-json': 0,
       'unicorn/no-abusive-eslint-disable': 0,
       '@typescript-eslint/triple-slash-reference': 0,
