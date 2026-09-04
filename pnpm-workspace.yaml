@@ -29,11 +29,10 @@ overrides:
   '@hono/node-server@<1.19.15': ^1.19.15
   'valibot@<=1.4.1': ^1.4.2
   'esbuild@<0.28.1': ^0.28.1
-  'vite@<8.0.16': ^8.0.16
   '@babel/core@<7.29.6': ^7.29.6
-  # Interim TS 7 migration: typescript-eslint has no TS 7 support yet
-  # (https://github.com/typescript-eslint/typescript-eslint/issues/10940),
-  # so .pnpmfile.cjs pins its TypeScript to 6.0.3 while tsc is already TS 7.
+  # Interim TS 7 migration: typescript-eslint and Astro language tooling
+  # do not yet support TS 7 (see https://github.com/typescript-eslint/typescript-eslint/issues/10940);
+  # root and apps/site pin typescript to 6.0.3 for tooling while packages use TS 7.
 
 catalog:
   '@egoist/tailwindcss-icons': 1.9.2
