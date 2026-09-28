@@ -11,6 +11,9 @@ minimumReleaseAge: 0
 overrides:
   motion: 12.38.0
   motion-dom: 12.38.0
+  # motion@12.38.0 ranges framer-motion@^12 (resolved 12.43.0, which needs
+  # motion-dom APIs newer than the pinned 12.38.0). Keep the family in sync.
+  framer-motion: 12.38.0
   'hono@<4.12.34': ^4.12.34
   'shell-quote@<1.9.0': ^1.9.0
   'qs@<6.15.2': ^6.15.2
@@ -30,9 +33,6 @@ overrides:
   'valibot@<=1.4.1': ^1.4.2
   'esbuild@<0.28.1': ^0.28.1
   '@babel/core@<7.29.6': ^7.29.6
-  # Interim TS 7 migration: typescript-eslint and Astro language tooling
-  # do not yet support TS 7 (see https://github.com/typescript-eslint/typescript-eslint/issues/10940);
-  # root and apps/site pin typescript to 6.0.3 for tooling while packages use TS 7.
 
 catalog:
   '@egoist/tailwindcss-icons': 1.9.2
@@ -52,7 +52,7 @@ catalog:
   tailwindcss-animate: 1.0.7
   tailwindcss-safe-area: 1.3.0
   tailwindcss-uikit-colors: 1.0.0
-  typescript: 7.0.2
+  typescript: 6.0.3
   zod: 4.5.4
 
 allowBuilds:
