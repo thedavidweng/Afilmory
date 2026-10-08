@@ -11,6 +11,7 @@ import { PhotoStorageService } from '@core/modules/content/photo/storage/photo-s
 import { formatBytesToMb } from '@core/modules/content/photo/storage/storage.utils'
 import { BillingPlanService } from '@core/modules/platform/billing/plan/billing-plan.service'
 import { quotaExceeded } from '@core/modules/platform/billing/quota/billing-quota.error'
+import { resolveLibraryItemLimit } from '@core/modules/platform/billing/quota/billing-quota.policy'
 import { BILLING_USAGE_EVENT } from '@core/modules/platform/billing/usage/billing-usage.constants'
 import { BillingUsageService } from '@core/modules/platform/billing/usage/billing-usage.service'
 import { GalleryPushQueue } from '@core/modules/platform/push-notifications/gallery-push.queue'
@@ -102,7 +103,7 @@ export class DataSyncService {
     const syncLimits = {
       maxObjectBytes: this.convertMbToBytes(effectiveMaxObjectMb),
       maxObjectSizeMb: effectiveMaxObjectMb,
-      libraryLimit: this.resolveLibraryItemLimit(planQuota.libraryItemLimit, storageConfig),
+      libraryLimit: resolveLibraryItemLimit(planQuota.libraryItemLimit, storageConfig.provider === 'managed'),
     }
     const context = await this.prepareSyncContext(tenant.tenant.id, builderConfig, storageConfig)
     this.ensureLibraryCapacityLimit({
@@ -1403,17 +1404,6 @@ export class DataSyncService {
       return null
     }
     return value * 1024 * 1024
-  }
-
-  private resolveLibraryItemLimit(planLimit: number | null, storageConfig: StorageConfig): number | null {
-    // Fix https://github.com/Afilmory/afilmory/issues/268
-    // BYO storage (S3/B2/GitHub) should not be capped by a 100-image hard
-    // limit. Managed plan's byte-capacity is the real ceiling; count quota is
-    // only meaningful for the hosted/managed mode.
-    if ((storageConfig as { provider?: string }).provider !== 'managed') {
-      return null
-    }
-    return planLimit
   }
 
   private ensureLibraryCapacityLimit(payload: { current: number, incoming: number, limit: number | null }): void {
