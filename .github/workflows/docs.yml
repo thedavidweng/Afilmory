@@ -59,10 +59,8 @@ jobs:
         uses: pnpm/action-setup@v6
         with:
           run_install: true
-      - name: Install dependencies
-        run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       - name: Build with Next.js
-        run: ${{ steps.detect-package-manager.outputs.runner }} pnpm docs:build
+        run: pnpm docs:build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
