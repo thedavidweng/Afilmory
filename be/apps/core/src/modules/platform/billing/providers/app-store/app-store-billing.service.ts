@@ -167,9 +167,6 @@ export class AppStoreBillingService {
     if (!environment || !productId || !originalTransactionId || !transactionId || !appAccountToken) {
       throw new BillingError('APP_STORE_TRANSACTION_MISSING_REQUIRED_FIELDS')
     }
-    if (environment !== getAppStoreEnvironment()) {
-      throw new BillingError('APP_STORE_ENVIRONMENT_MISMATCH')
-    }
     const offer = await this.catalog.findOfferByProduct('app_store', environment, productId)
     if (!offer) {
       throw new BillingError('APP_STORE_PRODUCT_NOT_ALLOWLISTED')
@@ -210,25 +207,28 @@ export class AppStoreBillingService {
     }
 
     const status = this.resolveTransactionStatus(transaction, context.notificationStatus)
+    const applied = environment === 'production'
     const reconcile = async () =>
-      await this.entitlements.reconcileSubscription({
-        appAccountToken,
-        applicationPlanId: offer.applicationPlanId,
-        billingOwnerUserId: subject.billingOwnerUserId ?? context.expectedOwnerUserId ?? null,
-        environment,
-        externalSubscriptionId: originalTransactionId,
-        metadata: { latestTransactionId: transactionId, productId },
-        offerId: offer.id,
-        originalTransactionId,
-        periodEnd: this.toIsoDate(transaction.expiresDate),
-        periodStart: this.toIsoDate(transaction.purchaseDate),
-        provider: 'app_store',
-        providerUpdatedAt: this.toIsoDate(transaction.signedDate),
-        rank: offer.rank,
-        status,
-        storagePlanId: offer.storagePlanId,
-        tenantId: subject.tenantId,
-      })
+      applied
+        ? await this.entitlements.reconcileSubscription({
+            appAccountToken,
+            applicationPlanId: offer.applicationPlanId,
+            billingOwnerUserId: subject.billingOwnerUserId ?? context.expectedOwnerUserId ?? null,
+            environment,
+            externalSubscriptionId: originalTransactionId,
+            metadata: { latestTransactionId: transactionId, productId },
+            offerId: offer.id,
+            originalTransactionId,
+            periodEnd: this.toIsoDate(transaction.expiresDate),
+            periodStart: this.toIsoDate(transaction.purchaseDate),
+            provider: 'app_store',
+            providerUpdatedAt: this.toIsoDate(transaction.signedDate),
+            rank: offer.rank,
+            status,
+            storagePlanId: offer.storagePlanId,
+            tenantId: subject.tenantId,
+          })
+        : null
 
     const outcome = context.skipEventInsert
       ? { duplicate: false, result: await reconcile() }
@@ -252,7 +252,9 @@ export class AppStoreBillingService {
         )
 
     return {
+      applied,
       duplicate: outcome.duplicate,
+      environment,
       originalTransactionId,
       projection: outcome.result,
       status,

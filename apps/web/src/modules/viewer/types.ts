@@ -1,4 +1,5 @@
 import type { PhotoRegion } from '@afilmory/builder'
+import type { AppleGainMapSource } from '@afilmory/webgl-viewer'
 
 import type { ImageLoaderManager } from '~/lib/image-loader-manager'
 
@@ -60,29 +61,6 @@ export interface ProgressiveImageProps {
   loadingIndicatorRef: React.RefObject<LoadingIndicatorRef | null>
 }
 
-export interface WebGLImageViewerRef {
-  zoomIn: (animated?: boolean) => void
-  zoomOut: (animated?: boolean) => void
-  resetView: () => void
-  getScale: () => number
-}
-
-export interface DOMImageViewerProps {
-  ref?: React.RefObject<import('react-zoom-pan-pinch').ReactZoomPanPinchRef | null>
-  onZoomChange?: (isZoomed: boolean, scale: number) => void
-  minZoom: number
-  maxZoom: number
-  enableZoom?: boolean
-  enablePan?: boolean
-  src: string
-  alt: string
-  width?: number
-  height?: number
-  highResLoaded: boolean
-  onLoad?: () => void
-  children?: React.ReactNode
-}
-
 export interface LivePhotoBadgeProps {
   livePhotoRef: React.RefObject<LivePhotoVideoHandle | null>
   isLivePhotoPlaying: boolean
@@ -90,6 +68,7 @@ export interface LivePhotoBadgeProps {
 }
 
 export interface ProgressiveImageState {
+  gainMap?: AppleGainMapSource
   blobSrc: string | null
   highResLoaded: boolean
   error: boolean

@@ -29,13 +29,15 @@ import { resolveLibraryItemLimit } from '@core/modules/platform/billing/quota/bi
 import { BILLING_USAGE_EVENT } from '@core/modules/platform/billing/usage/billing-usage.constants'
 import { BillingUsageService } from '@core/modules/platform/billing/usage/billing-usage.service'
 import { ManagedStorageService } from '@core/modules/platform/managed-storage/managed-storage.service'
+import { selectGalleryPushPreview } from '@core/modules/platform/push-notifications/gallery-push.payload'
 import { GalleryPushQueue } from '@core/modules/platform/push-notifications/gallery-push.queue'
 import { requireTenantContext } from '@core/modules/platform/tenant/tenant.context'
 import { createLogger } from '@tsuki-hono/common'
-import { EventEmitterService } from '@tsuki-hono/event-emitter'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { injectable } from 'tsyringe'
 
+import { ManifestSyncService } from '../../manifest-sync/manifest-sync.service'
+import type { PhotoChange } from '../../manifest-sync/manifest-sync.types'
 import { PhotoBuilderService } from '../builder/photo-builder.service'
 import { PhotoStorageService } from '../storage/photo-storage.service'
 import { formatBytesForDisplay, formatBytesToMb, normalizeKeyPath } from '../storage/storage.utils'
@@ -72,7 +74,7 @@ type UploadAssetsOptions = {
 
 declare module '@tsuki-hono/event-emitter' {
   interface Events {
-    'photo.manifest.changed': { tenantId: string }
+    'photo.manifest.changed': { tenantId: string, revision?: number }
   }
 }
 
@@ -81,7 +83,6 @@ export class PhotoAssetService {
   private readonly logger = createLogger('PhotoAssetService')
 
   constructor(
-    private readonly eventEmitter: EventEmitterService,
     private readonly dbAccessor: DbAccessor,
     private readonly photoBuilderService: PhotoBuilderService,
     private readonly photoStorageService: PhotoStorageService,
@@ -90,11 +91,8 @@ export class PhotoAssetService {
     private readonly storagePlanService: StoragePlanService,
     private readonly managedStorageService: ManagedStorageService,
     private readonly galleryPushQueue: GalleryPushQueue,
+    private readonly manifestSyncService: ManifestSyncService,
   ) {}
-
-  private async emitManifestChanged(tenantId: string): Promise<void> {
-    await this.eventEmitter.emit('photo.manifest.changed', { tenantId })
-  }
 
   async listAssets(): Promise<PhotoAssetListItem[]> {
     const tenant = requireTenantContext()
@@ -195,9 +193,9 @@ export class PhotoAssetService {
     return records.map(record => record.manifest.data)
   }
 
-  async deleteAssets(ids: readonly string[], options?: { deleteFromStorage?: boolean }): Promise<void> {
+  async deleteAssets(ids: readonly string[], options?: { deleteFromStorage?: boolean }): Promise<PhotoChange[]> {
     if (ids.length === 0) {
-      return
+      return []
     }
 
     const tenant = requireTenantContext()
@@ -209,7 +207,7 @@ export class PhotoAssetService {
       .where(and(eq(photoAssets.tenantId, tenant.tenant.id), inArray(photoAssets.id, ids)))
 
     if (records.length === 0) {
-      return
+      return []
     }
 
     const shouldDeleteFromStorage = options?.deleteFromStorage === true
@@ -275,7 +273,19 @@ export class PhotoAssetService {
       }
     }
 
-    await db.delete(photoAssets).where(and(eq(photoAssets.tenantId, tenant.tenant.id), inArray(photoAssets.id, ids)))
+    const changes = await db.transaction(async (tx) => {
+      await tx.delete(photoAssets).where(and(eq(photoAssets.tenantId, tenant.tenant.id), inArray(photoAssets.id, ids)))
+      return await this.manifestSyncService.recordDraftsOn(
+        tx,
+        tenant.tenant.id,
+        records.map(record => ({
+          operation: 'delete' as const,
+          photoId: record.photoId,
+          assetId: record.id,
+        })),
+      )
+    })
+    this.manifestSyncService.emitChanged(tenant.tenant.id, changes)
 
     if (managedProviderKey && storageConfigForDeletion) {
       const keys = [...managedKeysToDelete].filter(key => key.length > 0)
@@ -295,7 +305,7 @@ export class PhotoAssetService {
         },
       })
     }
-    await this.emitManifestChanged(tenant.tenant.id)
+    return changes
   }
 
   async uploadAssets(
@@ -513,11 +523,11 @@ export class PhotoAssetService {
         abortSignal: options?.abortSignal,
         builderLogEmitter,
         progressEmitter: options?.progress,
-        onProcessed: async ({ storageObject, manifestItem }) => {
+        onProcessed: async ({ storageObject, manifestItem, change }) => {
           throwIfAborted()
           processedCount += 1
           summary.inserted += 1
-          const action = this.createUploadAction(storageObject, manifestItem)
+          const action = this.createUploadAction(storageObject, manifestItem, change)
           actions.push(action)
           if (options?.progress) {
             await emitProgress({
@@ -527,6 +537,7 @@ export class PhotoAssetService {
                 index: processedCount,
                 total: totals['missing-in-db'],
                 action,
+                change,
                 summary: { ...summary },
               },
             })
@@ -537,6 +548,7 @@ export class PhotoAssetService {
                 index: processedCount,
                 total: totals['metadata-conflicts'],
                 action,
+                change,
                 summary: { ...summary },
               },
             })
@@ -579,7 +591,6 @@ export class PhotoAssetService {
       }
 
       if (processedItems.length > 0) {
-        await this.emitManifestChanged(tenant.tenant.id)
         await this.billingUsageService.recordEvent({
           eventType: BILLING_USAGE_EVENT.PHOTO_ASSET_CREATED,
           quantity: processedItems.length,
@@ -588,9 +599,20 @@ export class PhotoAssetService {
             uploadSource: 'manual-upload',
           },
         })
-        await this.galleryPushQueue.enqueueGalleryPublished(tenant.tenant.id, processedItems.length).catch((error) => {
-          this.logger.error('Failed to queue gallery update notifications', error)
-        })
+        await this.galleryPushQueue
+          .enqueueGalleryPublished(
+            tenant.tenant.id,
+            processedItems.length,
+            selectGalleryPushPreview(
+              processedItems.map(item => ({
+                photoId: item.photoId,
+                thumbnailUrl: item.manifest?.data?.thumbnailUrl,
+              })),
+            ),
+          )
+          .catch((error) => {
+            this.logger.error('Failed to queue gallery update notifications', error)
+          })
       }
 
       shouldRollbackUploads = false
@@ -936,6 +958,7 @@ export class PhotoAssetService {
       plan: PreparedUploadPlan
       storageObject: StorageObject
       manifestItem: PhotoManifestItem
+      change: PhotoChange | null
     }) => Promise<void> | void
   }): Promise<PhotoAssetListItem[]> {
     const {
@@ -1129,44 +1152,61 @@ export class PhotoAssetService {
         updatedAt: now,
       }
 
-      const [record] = await db
-        .insert(photoAssets)
-        .values(insertPayload)
-        .onConflictDoUpdate({
-          target: [photoAssets.tenantId, photoAssets.storageKey],
-          set: {
-            photoId: item.id,
-            storageProvider: storageConfig.provider,
-            size: snapshot.size ?? null,
-            etag: snapshot.etag ?? null,
-            lastModified: snapshot.lastModified ?? null,
-            metadataHash: snapshot.metadataHash,
-            manifestVersion: CURRENT_PHOTO_MANIFEST_VERSION,
-            manifest,
-            syncStatus: 'synced',
-            conflictReason: null,
-            conflictPayload: null,
-            syncedAt: now,
-            updatedAt: now,
-          },
-        })
-        .returning()
-
-      const saved
-        = record
-          ?? (
-            await db
-              .select()
-              .from(photoAssets)
-              .where(and(eq(photoAssets.tenantId, tenantId), eq(photoAssets.storageKey, resolvedPhotoKey)))
-              .limit(1)
-          )[0]
-
       const publicUrl = await this.resolvePublicUrlForRecord({
         storageManager,
         storageKey: resolvedPhotoKey,
         storageProvider: storageConfig.provider,
       })
+
+      const { saved, change } = await db.transaction(async (tx) => {
+        const [record] = await tx
+          .insert(photoAssets)
+          .values(insertPayload)
+          .onConflictDoUpdate({
+            target: [photoAssets.tenantId, photoAssets.storageKey],
+            set: {
+              photoId: item.id,
+              storageProvider: storageConfig.provider,
+              size: snapshot.size ?? null,
+              etag: snapshot.etag ?? null,
+              lastModified: snapshot.lastModified ?? null,
+              metadataHash: snapshot.metadataHash,
+              manifestVersion: CURRENT_PHOTO_MANIFEST_VERSION,
+              manifest,
+              syncStatus: 'synced',
+              conflictReason: null,
+              conflictPayload: null,
+              syncedAt: now,
+              updatedAt: now,
+            },
+          })
+          .returning()
+
+        const saved
+          = record
+            ?? (
+              await tx
+                .select()
+                .from(photoAssets)
+                .where(and(eq(photoAssets.tenantId, tenantId), eq(photoAssets.storageKey, resolvedPhotoKey)))
+                .limit(1)
+            )[0]
+
+        if (!saved) {
+          return { saved: null, change: null }
+        }
+
+        const [change] = await this.manifestSyncService.recordDraftsOn(tx, tenantId, [
+          { operation: 'upsert', record: saved, publicUrl },
+        ])
+        return { saved, change }
+      })
+      if (!saved) {
+        throw new BizException(ErrorCode.COMMON_INTERNAL_SERVER_ERROR, { message: '保存上传照片失败，请稍后再试' })
+      }
+      if (change) {
+        this.manifestSyncService.emitChanged(tenantId, [change])
+      }
 
       await this.recordManagedStorageReferences(storageConfig, tenantId, [
         {
@@ -1191,7 +1231,7 @@ export class PhotoAssetService {
       ])
 
       if (onProcessed) {
-        await onProcessed({ plan, storageObject, manifestItem: item })
+        await onProcessed({ plan, storageObject, manifestItem: item, change })
       }
 
       results.push({
@@ -1309,36 +1349,48 @@ export class PhotoAssetService {
       updatePayload.syncedAt = now
     }
 
-    const [saved] = await db
-      .update(photoAssets)
-      .set(updatePayload)
-      .where(and(eq(photoAssets.id, record.id), eq(photoAssets.tenantId, tenant.tenant.id)))
-      .returning()
+    const publicUrl = await this.resolvePublicUrlForRecord({
+      storageManager,
+      storageKey: newStorageKey,
+      storageProvider: record.storageProvider,
+    })
 
-    if (!saved) {
+    const committed = await db.transaction(async (tx) => {
+      const [saved] = await tx
+        .update(photoAssets)
+        .set(updatePayload)
+        .where(and(eq(photoAssets.id, record.id), eq(photoAssets.tenantId, tenant.tenant.id)))
+        .returning()
+
+      if (!saved) {
+        return null
+      }
+
+      const [change] = await this.manifestSyncService.recordDraftsOn(tx, tenant.tenant.id, [
+        { operation: 'upsert', record: saved, publicUrl },
+      ])
+      return { saved, change }
+    })
+
+    if (!committed) {
       throw new BizException(ErrorCode.COMMON_INTERNAL_SERVER_ERROR, { message: '更新标签失败，请稍后再试' })
     }
 
-    const publicUrl = await this.resolvePublicUrlForRecord({
-      storageManager,
-      storageKey: saved.storageKey,
-      storageProvider: saved.storageProvider,
-    })
-
-    await this.emitManifestChanged(tenant.tenant.id)
+    this.manifestSyncService.emitChanged(tenant.tenant.id, [committed.change])
 
     return {
-      id: saved.id,
-      photoId: saved.photoId,
-      storageKey: saved.storageKey,
-      storageProvider: saved.storageProvider,
-      manifest: saved.manifest,
-      syncedAt: saved.syncedAt,
-      updatedAt: saved.updatedAt,
-      createdAt: saved.createdAt,
+      id: committed.saved.id,
+      photoId: committed.saved.photoId,
+      storageKey: committed.saved.storageKey,
+      storageProvider: committed.saved.storageProvider,
+      manifest: committed.saved.manifest,
+      syncedAt: committed.saved.syncedAt,
+      updatedAt: committed.saved.updatedAt,
+      createdAt: committed.saved.createdAt,
       publicUrl,
-      size: saved.size ?? null,
-      syncStatus: saved.syncStatus,
+      size: committed.saved.size ?? null,
+      syncStatus: committed.saved.syncStatus,
+      change: committed.change,
     }
   }
 
@@ -1364,7 +1416,11 @@ export class PhotoAssetService {
     }
   }
 
-  private createUploadAction(storageObject: StorageObject, manifestItem: PhotoManifestItem): DataSyncAction {
+  private createUploadAction(
+    storageObject: StorageObject,
+    manifestItem: PhotoManifestItem,
+    change?: PhotoChange | null,
+  ): DataSyncAction {
     const snapshot = this.createStorageSnapshot(storageObject)
     return {
       type: 'insert',
@@ -1376,6 +1432,7 @@ export class PhotoAssetService {
         after: snapshot,
       },
       manifestAfter: structuredClone(manifestItem),
+      change: change ?? null,
     }
   }
 

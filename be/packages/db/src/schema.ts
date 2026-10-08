@@ -770,6 +770,54 @@ export const photoAssets = pgTable(
   ],
 )
 
+export type ManifestChangeOperation = 'upsert' | 'delete'
+
+export type ManifestChangePayload = {
+  operation: ManifestChangeOperation
+  photoId: string
+  assetId: string | null
+  published: boolean
+  photo: PhotoManifestItem | null
+  asset: {
+    id: string
+    photoId: string
+    storageKey: string
+    storageProvider: string
+    syncStatus: 'pending' | 'synced' | 'conflict'
+    size: number | null
+    createdAt: string
+    updatedAt: string
+    syncedAt: string
+    publicUrl: string | null
+  } | null
+}
+
+export const tenantManifestStates = pgTable('tenant_manifest_state', {
+  tenantId: text('tenant_id')
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  revision: bigint('revision', { mode: 'number' }).notNull().default(0),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+})
+
+export const tenantManifestChanges = pgTable(
+  'tenant_manifest_change',
+  {
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    revision: bigint('revision', { mode: 'number' }).notNull(),
+    operation: text('operation').$type<ManifestChangeOperation>().notNull(),
+    photoId: text('photo_id').notNull(),
+    payload: jsonb('payload').$type<ManifestChangePayload>().notNull(),
+    createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  },
+  t => [
+    unique('uq_tenant_manifest_change_revision').on(t.tenantId, t.revision),
+    index('idx_tenant_manifest_change_tenant_revision').on(t.tenantId, t.revision),
+  ],
+)
+
 export const photoSyncRuns = pgTable(
   'photo_sync_run',
   {
@@ -861,14 +909,27 @@ export const superAdminAuditLogs = pgTable(
   ],
 )
 
+export interface CleanupCriteria {
+  inactiveMonths: number
+  maxPhotos: number
+  maxStorageMb: number
+  onlyReported: boolean
+  minSuspendedDays: number
+}
+
+// Rows cover both tenants and users; the table name predates user support.
 export const tenantCleanupBatches = pgTable(
   'tenant_cleanup_batch',
   {
     id: snowflakeId,
     actorUserId: text('actor_user_id').references(() => authUsers.id, { onDelete: 'set null' }),
+    subjectType: text('subject_type').notNull().default('tenant'),
+    mode: text('mode').notNull().default('delete'),
+    criteria: jsonb('criteria').$type<CleanupCriteria | null>().default(null),
     inactiveMonths: integer('inactive_months').notNull().default(3),
     status: text('status').notNull().default('processing'),
     candidateCount: integer('candidate_count').notNull().default(0),
+    suspendedCount: integer('suspended_count').notNull().default(0),
     deletedCount: integer('deleted_count').notNull().default(0),
     skippedCount: integer('skipped_count').notNull().default(0),
     failedCount: integer('failed_count').notNull().default(0),
@@ -886,8 +947,11 @@ export const tenantCleanupItems = pgTable(
     batchId: text('batch_id')
       .notNull()
       .references(() => tenantCleanupBatches.id, { onDelete: 'cascade' }),
-    tenantId: text('tenant_id').notNull(),
-    tenantSlug: text('tenant_slug').notNull(),
+    subjectType: text('subject_type').notNull().default('tenant'),
+    tenantId: text('tenant_id'),
+    tenantSlug: text('tenant_slug'),
+    userId: text('user_id'),
+    subjectLabel: text('subject_label'),
     status: text('status').notNull().default('pending'),
     lastActivityAt: timestamp('last_activity_at', { mode: 'string' }),
     reason: text('reason'),
@@ -897,7 +961,9 @@ export const tenantCleanupItems = pgTable(
   },
   t => [
     unique('uq_tenant_cleanup_item_batch_tenant').on(t.batchId, t.tenantId),
+    unique('uq_tenant_cleanup_item_batch_user').on(t.batchId, t.userId),
     index('idx_tenant_cleanup_item_batch_status').on(t.batchId, t.status),
+    index('idx_tenant_cleanup_item_sweep').on(t.status, t.completedAt),
   ],
 )
 
@@ -932,6 +998,8 @@ export const dbSchema = {
   managedStorageUsages,
   managedStorageFileReferences,
   photoAssets,
+  tenantManifestStates,
+  tenantManifestChanges,
   photoSyncRuns,
   billingUsageEvents,
   platformActivityEvents,

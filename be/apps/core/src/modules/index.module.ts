@@ -20,6 +20,7 @@ import { StorageSettingModule } from './configuration/storage-setting/storage-se
 import { SystemSettingModule } from './configuration/system-setting/system-setting.module'
 import { CommentModule } from './content/comment/comment.module'
 import { FeedModule } from './content/feed/feed.module'
+import { ManifestSyncModule } from './content/manifest-sync/manifest-sync.module'
 import { OgModule } from './content/og/og.module'
 import { PhotoModule } from './content/photo/photo.module'
 import { ReactionModule } from './content/reaction/reaction.module'
@@ -27,6 +28,7 @@ import { CacheModule } from './infrastructure/cache/cache.module'
 import { DataSyncModule } from './infrastructure/data-sync/data-sync.module'
 import { HealthModule } from './infrastructure/health/health.module'
 import { StaticWebModule } from './infrastructure/static-web/static-web.module'
+import { WellKnownModule } from './infrastructure/well-known/well-known.module'
 import { MailModule } from './mail/mail.module'
 import { AccountDeletionModule } from './platform/account-deletion/account-deletion.module'
 import { ActivityModule } from './platform/activity/activity.module'
@@ -69,6 +71,7 @@ function createEventModuleOptions(redis: RedisAccessor) {
     SiteSettingModule,
     SystemSettingModule,
     SuperAdminModule,
+    ManifestSyncModule,
     PhotoModule,
     CommentModule,
     ReactionModule,
@@ -85,6 +88,7 @@ function createEventModuleOptions(redis: RedisAccessor) {
     FeedModule,
     OgModule,
     AppInitializationModule,
+    WellKnownModule,
 
     // This must be last
     StaticWebModule,

@@ -1,19 +1,6 @@
 import SwiftUI
 import UIKit
 
-private struct StudioTagsBody: Encodable {
-  let tags: [String]
-}
-
-private struct StudioDeleteBody: Encodable {
-  let deleteFromStorage: Bool
-  let ids: [String]
-}
-
-private struct StudioDeleteResponse: Decodable {
-  let deleted: Bool
-}
-
 enum StudioLibraryDeletePolicy {
   static func requiresStorageDeletion(storageProviders: [String]) -> Bool {
     storageProviders.contains { provider in
@@ -299,7 +286,7 @@ final class StudioLibraryController: UIViewController {
     alert.addTextField { $0.text = common }
     alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
     alert.addAction(UIAlertAction(title: String(localized: "Save"), style: .default) { [weak self, weak alert] _ in
-      self?.applyTags(Self.parseTags(alert?.textFields?.first?.text ?? ""), to: selected.map(\.asset.id))
+      self?.applyTags(StudioPhotoMutations.parseTags(alert?.textFields?.first?.text ?? ""), to: selected.map(\.asset.id))
     })
     present(alert, animated: true)
   }
@@ -309,17 +296,13 @@ final class StudioLibraryController: UIViewController {
     updateNavigation()
     Task { [weak self] in
       do {
-        for id in ids {
-          let endpoint = APIEndpoint(
-            baseURL: .tenant,
-            path: "photos/assets/\(id)/tags",
-            method: .patch,
-            body: try APIEndpoint.jsonBody(StudioTagsBody(tags: tags))
-          )
-          let _: StudioAsset = try await AfilmoryAPI.shared.request(endpoint)
+        try await StudioPhotoMutations.applyTags(tags, assetIds: ids) { change in
+          PhotoFeedStore.shared.applyCommitted(change)
         }
         self?.leaveSelection()
-        self?.reload()
+        if let slug = self?.gallerySlug {
+          PhotoSyncEngine.shared.ensureSynced(slug: slug, includeStudio: true)
+        }
       } catch {
         self?.showError(
           title: String(localized: "Unable to update tags"),
@@ -373,17 +356,14 @@ final class StudioLibraryController: UIViewController {
     updateNavigation()
     Task { [weak self] in
       do {
-        let endpoint = APIEndpoint(
-          baseURL: .tenant,
-          path: "photos/assets",
-          method: .delete,
-          body: try APIEndpoint.jsonBody(
-            StudioDeleteBody(deleteFromStorage: fromStorage, ids: ids)
-          )
-        )
-        let _: StudioDeleteResponse = try await AfilmoryAPI.shared.request(endpoint)
+        let changes = try await StudioPhotoMutations.delete(assetIds: ids, fromStorage: fromStorage)
+        for change in changes {
+          PhotoFeedStore.shared.applyCommitted(change)
+        }
         self?.leaveSelection()
-        self?.reload()
+        if let slug = self?.gallerySlug {
+          PhotoSyncEngine.shared.ensureSynced(slug: slug, includeStudio: true)
+        }
       } catch {
         self?.showError(
           title: String(localized: "Unable to delete photos"),
@@ -486,7 +466,7 @@ final class StudioLibraryController: UIViewController {
     for item in feed.studioPhotos {
       guard case .array(let tags) = item.asset.manifest.data["tags"] else { continue }
       for tag in tags.compactMap(\.string) {
-        let normalized = tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalized = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         if !normalized.isEmpty, seen.insert(normalized).inserted {
           values.append(normalized)
         }
@@ -543,15 +523,6 @@ final class StudioLibraryController: UIViewController {
         return values.compactMap(\.string).contains(tag)
       }
     }
-  }
-
-  private static func parseTags(_ value: String) -> [String] {
-    var seen = Set<String>()
-    return value.split(separator: ",").compactMap { part in
-      let tag = part.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !tag.isEmpty, seen.insert(tag).inserted else { return nil }
-      return tag
-    }.prefix(32).map { $0 }
   }
 
 }

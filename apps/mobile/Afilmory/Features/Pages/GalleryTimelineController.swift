@@ -2,19 +2,21 @@ import UIKit
 
 final class GalleryTimelineController: UIViewController, UITableViewDataSource, UITableViewDelegate {
   var onBrowseExploreHandler: () -> Void
-  private let onOpenGallery: (String, String, String?) -> Void
+  private let onOpenGallery: (GalleryHeaderModel, String?) -> Void
   private let tableView = UITableView(frame: .zero, style: .plain)
   private let refreshControl = UIRefreshControl()
   private var sections: [(day: String, events: [GalleryTimelineEvent])] = []
 
   init(
-    onOpenGallery: @escaping (String, String, String?) -> Void,
+    onOpenGallery: @escaping (GalleryHeaderModel, String?) -> Void,
     onBrowseExplore: @escaping () -> Void
   ) {
     self.onOpenGallery = onOpenGallery
     onBrowseExploreHandler = onBrowseExplore
     super.init(nibName: nil, bundle: nil)
   }
+
+  var exploreScrollView: UIScrollView { tableView }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) {
@@ -113,7 +115,7 @@ final class GalleryTimelineController: UIViewController, UITableViewDataSource, 
     }
     let event = sections[indexPath.section].events[indexPath.row]
     cell.configure(event) { [weak self] photoID in
-      self?.onOpenGallery(event.gallery.slug, event.gallery.name, photoID)
+      self?.onOpenGallery(GalleryHeaderModel(timelineEvent: event), photoID)
     }
     return cell
   }
@@ -121,7 +123,7 @@ final class GalleryTimelineController: UIViewController, UITableViewDataSource, 
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
     let event = sections[indexPath.section].events[indexPath.row]
-    onOpenGallery(event.gallery.slug, event.gallery.name, nil)
+    onOpenGallery(GalleryHeaderModel(timelineEvent: event), nil)
   }
 
   func scrollViewDidScroll(_ scrollView: UIScrollView) {

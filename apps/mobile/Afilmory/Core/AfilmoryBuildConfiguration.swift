@@ -37,7 +37,7 @@ enum AfilmoryBuildConfiguration {
   static var supportsAppleAuthentication: Bool { variant == .production }
   static var supportsPushNotifications: Bool { variant == .production }
   static var supportsShareExtension: Bool { variant == .production }
-  static var supportsStoreKitSponsorship: Bool { variant == .production }
+  static var supportsStoreKitSponsorship: Bool { false }
   static var supportsStoreKitBilling: Bool { variant == .production }
 
   static var allowsApiEnvironmentOverride: Bool {
@@ -45,6 +45,17 @@ enum AfilmoryBuildConfiguration {
       true
     #else
       false
+    #endif
+  }
+
+  static var isTestFlight: Bool {
+    #if targetEnvironment(simulator)
+      false
+    #elseif DEBUG
+      false
+    #else
+      guard variant == .production else { return false }
+      return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
     #endif
   }
 }

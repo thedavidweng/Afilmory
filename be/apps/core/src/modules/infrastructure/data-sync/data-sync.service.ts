@@ -6,6 +6,7 @@ import type { PhotoAssetConflictPayload, PhotoAssetConflictSnapshot, PhotoAssetM
 import { CURRENT_PHOTO_MANIFEST_VERSION, DATABASE_ONLY_PROVIDER, photoAssets, photoSyncRuns } from '@afilmory/db'
 import { DbAccessor } from '@core/database/database.provider'
 import { BizException, ErrorCode } from '@core/errors'
+import { ManifestSyncService } from '@core/modules/content/manifest-sync/manifest-sync.service'
 import { PhotoBuilderService } from '@core/modules/content/photo/builder/photo-builder.service'
 import { PhotoStorageService } from '@core/modules/content/photo/storage/photo-storage.service'
 import { formatBytesToMb } from '@core/modules/content/photo/storage/storage.utils'
@@ -14,6 +15,7 @@ import { quotaExceeded } from '@core/modules/platform/billing/quota/billing-quot
 import { resolveLibraryItemLimit } from '@core/modules/platform/billing/quota/billing-quota.policy'
 import { BILLING_USAGE_EVENT } from '@core/modules/platform/billing/usage/billing-usage.constants'
 import { BillingUsageService } from '@core/modules/platform/billing/usage/billing-usage.service'
+import { selectGalleryPushPreview } from '@core/modules/platform/push-notifications/gallery-push.payload'
 import { GalleryPushQueue } from '@core/modules/platform/push-notifications/gallery-push.queue'
 import { requireTenantContext } from '@core/modules/platform/tenant/tenant.context'
 import { createLogger } from '@tsuki-hono/common'
@@ -88,6 +90,7 @@ export class DataSyncService {
     private readonly billingPlanService: BillingPlanService,
     private readonly billingUsageService: BillingUsageService,
     private readonly galleryPushQueue: GalleryPushQueue,
+    private readonly manifestSyncService: ManifestSyncService,
   ) {}
 
   private async emitManifestChanged(tenantId: string): Promise<void> {
@@ -203,13 +206,24 @@ export class DataSyncService {
     if (!options.dryRun) {
       const mutated = actions.some(action => action.applied)
       if (mutated) {
-        await this.emitManifestChanged(tenant.tenant.id)
+        await this.manifestSyncService.recordAppliedActions(tenant.tenant.id, actions)
       }
-      const insertedCount = actions.filter(action => action.type === 'insert' && action.applied).length
-      if (insertedCount > 0) {
-        await this.galleryPushQueue.enqueueGalleryPublished(tenant.tenant.id, insertedCount).catch((error) => {
-          this.logger.error('Failed to queue gallery update notifications', error)
-        })
+      const inserted = actions.filter(action => action.type === 'insert' && action.applied)
+      if (inserted.length > 0) {
+        await this.galleryPushQueue
+          .enqueueGalleryPublished(
+            tenant.tenant.id,
+            inserted.length,
+            selectGalleryPushPreview(
+              inserted.map(action => ({
+                photoId: action.photoId,
+                thumbnailUrl: action.manifestAfter?.thumbnailUrl,
+              })),
+            ),
+          )
+          .catch((error) => {
+            this.logger.error('Failed to queue gallery update notifications', error)
+          })
       }
     }
 
@@ -290,14 +304,14 @@ export class DataSyncService {
     if (options.strategy === ConflictResolutionStrategy.PREFER_STORAGE) {
       const action = await this.resolveByStorage(record, conflictPayload, options, dryRun, tenant.tenant.id, db)
       if (!dryRun && action.applied) {
-        await this.emitManifestChanged(tenant.tenant.id)
+        await this.manifestSyncService.recordAppliedActions(tenant.tenant.id, [action])
       }
       return action
     }
 
     const action = await this.resolveByDatabase(record, conflictPayload, dryRun, tenant.tenant.id, db)
     if (!dryRun && action.applied) {
-      await this.emitManifestChanged(tenant.tenant.id)
+      await this.manifestSyncService.recordAppliedActions(tenant.tenant.id, [action])
     }
     return action
   }

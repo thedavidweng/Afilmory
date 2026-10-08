@@ -6,6 +6,7 @@ export interface Translations {
     description: string
   }
   nav: {
+    features?: string
     demo: string
     discover: string
     docs: string
@@ -22,6 +23,38 @@ export interface Translations {
     login: string
     secondary: string
     note: string
+    appStoreEyebrow: string
+    appStore: string
+  }
+  bento: {
+    eyebrow: string
+    title: string
+    subtitle: string
+    exif: {
+      badge: string
+      title: string
+      description: string
+    }
+    color: {
+      badge: string
+      title: string
+      description: string
+    }
+    live: {
+      badge: string
+      title: string
+      description: string
+    }
+    map: {
+      badge: string
+      title: string
+      description: string
+    }
+    arch: {
+      badge: string
+      title: string
+      description: string
+    }
   }
   demo: {
     label: string
@@ -101,6 +134,7 @@ export interface Translations {
     docs: string
     github: string
     selfHost: string
+    appStore: string
     copy: string
   }
 }

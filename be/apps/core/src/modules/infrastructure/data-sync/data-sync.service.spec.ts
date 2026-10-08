@@ -45,6 +45,7 @@ function createService(options: { storageConfig: StorageConfig, currentPhotos: n
     billingPlanService as never,
     {} as never,
     {} as never,
+    {} as never,
   )
 
   const internals = service as unknown as Internals

@@ -35,7 +35,7 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
   func open(url: URL) -> Bool {
     guard let route = AfilmoryDeepLink.parse(url) else { return false }
     pendingDeepLink = route
-    applyPendingDeepLinkIfPossible()
+    applyPendingDeepLinkIfPossible(for: AfilmorySessionStore.shared.current().state)
     return true
   }
 
@@ -67,16 +67,21 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
 
   private func render(_ state: AfilmorySessionState) {
     let next: UIViewController
-    switch state {
+    switch state.rootPresentation {
     case .loading:
       next = LoadingViewController()
-    case .signedIn:
+    case .authenticatedTabs:
       next = makeAuthenticatedTabs()
-    case .signedOut, .failed:
+    case .workspaceSetup:
+      next = WorkspaceSetupViewController(
+        mode: state.session?.workspaceSetupMode ?? .create
+      )
+    case .visitor:
       next = makeVisitorController()
     }
     replaceRoot(with: next)
-    applyPendingDeepLinkIfPossible()
+    applyPendingDeepLinkIfPossible(for: state)
+    presentTestFlightAppStorePromptIfNeeded(for: state)
   }
 
   private func makeVisitorController() -> UIViewController {
@@ -92,9 +97,9 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
     let photos = PhotosHomeController(
       onRequestSignIn: { [weak self] in self?.presentSignIn() },
       onRequestSignOut: { AfilmorySessionStore.shared.clearSession() },
-      onRequestWorkspaceSetup: { [weak self] in self?.presentWorkspaceSetup() },
       onRequestAccountSettings: { [weak self] in self?.presentAccountSettings(startsDeletion: false) },
-      onRequestAccountDeletion: { [weak self] in self?.presentAccountSettings(startsDeletion: true) }
+      onRequestAccountDeletion: { [weak self] in self?.presentAccountSettings(startsDeletion: true) },
+      onRequestStudioLibrary: { [weak self] in self?.openStudio(route: .library) }
     )
     photos.tabBarItem = UITabBarItem(
       title: String(localized: "Photos"),
@@ -170,6 +175,8 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
       UIHostingController(rootView: StudioOperationsView())
     case .site:
       UIHostingController(rootView: StudioSiteView())
+    case .domain:
+      UIHostingController(rootView: StudioDomainView())
     case .library:
       preconditionFailure("The library route is handled above.")
     }
@@ -199,10 +206,6 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
     presenter.present(controller, animated: true)
   }
 
-  private func presentWorkspaceSetup() {
-    presentSheet(WorkspaceSetupView())
-  }
-
   private func presentAccountSettings(startsDeletion: Bool) {
     presentSheet(
       AccountSettingsView(
@@ -212,10 +215,8 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
     )
   }
 
-  private func applyPendingDeepLinkIfPossible() {
-    guard let route = pendingDeepLink,
-          !(window.rootViewController is LoadingViewController)
-    else {
+  private func applyPendingDeepLinkIfPossible(for state: AfilmorySessionState) {
+    guard state.shouldApplyPendingDeepLink, let route = pendingDeepLink else {
       return
     }
     pendingDeepLink = nil
@@ -240,14 +241,7 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
         galleries.openGallery(galleryRoute)
       }
     case .studio(let studioRoute):
-      guard let tabs = window.rootViewController as? AfilmoryTabBarController,
-            let navigation = tabs.viewControllers?[safe: 3] as? UINavigationController
-      else { return }
-      tabs.selectTab(at: 3)
-      navigation.popToRootViewController(animated: false)
-      if let studioRoute {
-        navigation.pushViewController(makeStudioRoute(studioRoute), animated: true)
-      }
+      openStudio(route: studioRoute)
     case .developerLab:
       #if DEBUG
         if let navigation = window.rootViewController as? UINavigationController {
@@ -260,6 +254,17 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
         tabs.selectTab(at: 3)
         presentDeveloperLab(on: navigation)
       #endif
+    }
+  }
+
+  private func openStudio(route: StudioHomeRoute?) {
+    guard let tabs = window.rootViewController as? AfilmoryTabBarController,
+          let navigation = tabs.viewControllers?[safe: 3] as? UINavigationController
+    else { return }
+    tabs.selectTab(at: 3)
+    navigation.popToRootViewController(animated: false)
+    if let route {
+      navigation.pushViewController(makeStudioRoute(route), animated: true)
     }
   }
 
@@ -287,6 +292,11 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
     AfilmorySessionStore.shared.clearSession()
   }
 
+  private func presentTestFlightAppStorePromptIfNeeded(for state: AfilmorySessionState) {
+    guard state.shouldPresentTestFlightPrompt, let root = window.rootViewController else { return }
+    TestFlightAppStorePrompt.shared.present(from: root)
+  }
+
   private func presentSheet<Content: View>(_ content: Content) {
     let controller = UIHostingController(rootView: content)
     controller.modalPresentationStyle = .pageSheet
@@ -309,6 +319,14 @@ final class ApplicationCoordinator: NSObject, UNUserNotificationCenterDelegate {
   }
 
   private func replaceRoot(with controller: UIViewController) {
+    if let current = window.rootViewController as? WorkspaceSetupViewController,
+       let next = controller as? WorkspaceSetupViewController
+    {
+      if current.rootView.mode != next.rootView.mode {
+        window.rootViewController = next
+      }
+      return
+    }
     if let current = window.rootViewController,
        type(of: current) == type(of: controller)
     {
@@ -332,6 +350,7 @@ private extension StudioHomeRoute {
     case .library: String(localized: "Photo Library")
     case .operations: String(localized: "Operations")
     case .site: String(localized: "Site Settings")
+    case .domain: String(localized: "Custom domain")
     }
   }
 }

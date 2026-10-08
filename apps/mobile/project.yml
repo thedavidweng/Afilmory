@@ -16,6 +16,9 @@ packages:
   SDWebImage:
     url: https://github.com/SDWebImage/SDWebImage.git
     exactVersion: 5.21.7
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    exactVersion: 7.6.1
 
 settings:
   base:
@@ -45,9 +48,13 @@ targets:
     dependencies:
       - package: SDWebImage
         product: SDWebImage
+      - package: GRDB
+        product: GRDB
       - target: AfilmoryShare
         embed: true
       - target: AfilmoryWidgets
+        embed: true
+      - target: AfilmoryNotification
         embed: true
     info:
       path: Afilmory/Info.plist
@@ -57,6 +64,8 @@ targets:
         AfilmoryURLScheme: "$(AFILMORY_URL_SCHEME)"
         CFBundleAllowMixedLocalizations: true
         CFBundleDisplayName: "$(AFILMORY_DISPLAY_NAME)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleLocalizations:
           - en
           - zh-Hans
@@ -78,7 +87,10 @@ targets:
             localhost:
               NSExceptionAllowsInsecureHTTPLoads: true
               NSIncludesSubdomains: true
+        NSPhotoLibraryAddUsageDescription: Allow Afilmory to save photos to your library.
         NSPhotoLibraryUsageDescription: Allow Afilmory Studio to select photos for your gallery.
+        NSUserActivityTypes:
+          - INSendMessageIntent
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - remote-notification
@@ -103,7 +115,7 @@ targets:
       base:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: "1.0"
+        MARKETING_VERSION: "1.5.1"
         PRODUCT_MODULE_NAME: Afilmory
         SUPPORTS_MACCATALYST: NO
       configs:
@@ -139,6 +151,8 @@ targets:
       path: targets/share/Info.plist
       properties:
         CFBundleDisplayName: Afilmory
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionAttributes:
             NSExtensionActivationRule:
@@ -149,7 +163,7 @@ targets:
     settings:
       base:
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: "1.0"
+        MARKETING_VERSION: "1.5.1"
         PRODUCT_MODULE_NAME: AfilmoryShare
         PRODUCT_NAME: AfilmoryShare
         SKIP_INSTALL: YES
@@ -168,17 +182,21 @@ targets:
     sources:
       - path: targets/widgets
         type: syncedFolder
+      - path: Afilmory/Core/Widgets/WidgetSnapshot.swift
+        group: Afilmory/Core/Widgets
     info:
       path: targets/widgets/Info.plist
       properties:
         CFBundleDisplayName: Afilmory
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: $accent
         CURRENT_PROJECT_VERSION: 1
-        MARKETING_VERSION: "1.0"
+        MARKETING_VERSION: "1.5.1"
         PRODUCT_MODULE_NAME: AfilmoryWidgets
         PRODUCT_NAME: AfilmoryWidgets
         SKIP_INSTALL: YES
@@ -186,7 +204,44 @@ targets:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: app.afilmory.local.widgets
         Release:
+          CODE_SIGN_ENTITLEMENTS: targets/widgets/AfilmoryWidgets.entitlements
           PRODUCT_BUNDLE_IDENTIFIER: app.afilmory.widgets
+
+  AfilmoryNotification:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: targets/notification
+        type: syncedFolder
+      - path: Afilmory/Core/Push/GalleryPushImageAttachment.swift
+        group: Afilmory/Core/Push
+      - path: Afilmory/Core/Push/GalleryPushCommunication.swift
+        group: Afilmory/Core/Push
+    dependencies:
+      - sdk: Intents.framework
+    info:
+      path: targets/notification/Info.plist
+      properties:
+        CFBundleDisplayName: Afilmory
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).NotificationService"
+    settings:
+      base:
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "1.5.1"
+        PRODUCT_MODULE_NAME: AfilmoryNotification
+        PRODUCT_NAME: AfilmoryNotification
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: app.afilmory.local.notification
+        Release:
+          CODE_SIGN_ENTITLEMENTS: targets/notification/AfilmoryNotification.entitlements
+          PRODUCT_BUNDLE_IDENTIFIER: app.afilmory.notification
 
   AfilmoryTests:
     type: bundle.unit-test

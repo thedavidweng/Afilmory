@@ -21,6 +21,7 @@ import { authApi, canAccessDashboard } from '~/lib/api/auth'
 
 import { UserAvatar } from '../../social/comments/UserAvatar'
 import { ViewPanel } from '../panels/ViewPanel'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import { ActionIconButton, resolveSocialUrl } from './utils'
 
 export const PageHeaderRight = () => {
@@ -57,7 +58,7 @@ export const PageHeaderRight = () => {
           <ActionIconButton
             icon="i-mingcute-map-pin-line"
             title={t('action.map.explore')}
-            onClick={() => navigate('/explory')}
+            onClick={() => navigate('/map')}
           />
         )}
 
@@ -78,6 +79,8 @@ export const PageHeaderRight = () => {
             <ViewPanel />
           </DesktopViewButton>
         )}
+
+        <LanguageSwitcher />
 
         {isMobile && <MoreActionMenu />}
       </div>

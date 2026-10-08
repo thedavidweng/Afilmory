@@ -54,11 +54,11 @@ function createService(options: { storageConfig: StorageConfig, currentPhotos: n
     applyStorageConfig: vi.fn(),
   }
   const service = new PhotoAssetService(
-    {} as never,
     { get: () => ({}) } as never,
     photoBuilderService as never,
     photoStorageService as never,
     billingPlanService as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never,
